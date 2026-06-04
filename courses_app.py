@@ -173,6 +173,8 @@ def create_course():
         'series_type_id': d.get('series_type_id', ''),
         'marks':          d.get('marks', []),
         'committee_boat': d.get('committee_boat', None),
+        'wind_bearing_min': d.get('wind_bearing_min', None),
+        'wind_bearing_max': d.get('wind_bearing_max', None),
     }
     courses.append(course)
     _save(COURSES_FILE, courses)
@@ -190,6 +192,8 @@ def update_course(cid):
             course['series_type_id'] = d.get('series_type_id', course['series_type_id'])
             course['marks']          = d.get('marks',          course['marks'])
             course['committee_boat'] = d.get('committee_boat', course.get('committee_boat'))
+            course['wind_bearing_min'] = d.get('wind_bearing_min', course.get('wind_bearing_min'))
+            course['wind_bearing_max'] = d.get('wind_bearing_max', course.get('wind_bearing_max'))
             _save(COURSES_FILE, courses)
             return jsonify(course)
     return jsonify({'error': 'Not found'}), 404

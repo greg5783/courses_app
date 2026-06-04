@@ -26,6 +26,25 @@
     .mark-row:last-child { border-bottom: none; }
     .leaflet-map { border-radius: 8px; }
     #viewMap, #editorMap { height: 420px; border-radius: 8px; }
+    .map-compass-overlay {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 128px;
+      height: 128px;
+      pointer-events: none;
+      z-index: 650;
+    }
+    .map-compass-overlay svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .map-compass-overlay .compass-label {
+      font: 600 10px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      fill: #212529;
+      text-anchor: middle;
+    }
     .wp-color-swatch {
       display: inline-block; width: 14px; height: 14px; border-radius: 3px;
       border: 1px solid #aaa; vertical-align: middle; margin-right: 4px;
@@ -133,9 +152,18 @@
             <label class="form-label fw-semibold">Course name</label>
             <input type="text" class="form-control" id="editorName" placeholder="e.g. Olympic Triangle">
           </div>
-          <div class="col-md-6">
+          <div class="col-md-3">
             <label class="form-label fw-semibold">Series type</label>
             <select class="form-select" id="editorSeriesType"></select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold">Wind bearing</label>
+            <div class="input-group">
+              <input id="editorWindMin" type="number" class="form-control" min="0" max="360" placeholder="Min °" oninput="updateEditorWind()">
+              <span class="input-group-text">to</span>
+              <input id="editorWindMax" type="number" class="form-control" min="0" max="360" placeholder="Max °" oninput="updateEditorWind()">
+            </div>
+            <div class="form-text">Enter wind range in degrees (0 = N, 90 = E).</div>
           </div>
         </div>
 
@@ -381,6 +409,8 @@ const S = {
   editingCourseId: null,
   editorMarks: [],       // array of waypoint ID strings OR custom mark objects
   committeeBoat: null,   // {lat, lon} or null
+  windBearingMin: null,
+  windBearingMax: null,
   placingCB: false,
   viewMap: null,
   editorMap: null,
@@ -496,6 +526,63 @@ function makeWpDotIcon(wp) {
     html: `<div style="opacity:0.38">${shapeSvg(mt.shape, mt.fill, mt.stroke, sz)}</div>`,
     iconSize: [sz, sz], iconAnchor: [sz/2, sz/2], popupAnchor: [0, -(sz/2 + 3)],
   });
+}
+
+function normalizeBearingValue(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const num = Number(value);
+  if (!Number.isFinite(num)) return null;
+  return ((Math.round(num) % 360) + 360) % 360;
+}
+
+function formatBearing(value) {
+  if (value === null || value === undefined) return '—';
+  return String(value).padStart(3, '0');
+}
+
+function pointForBearing(bearing, radius, cx = 50, cy = 50) {
+  const rad = (bearing - 90) * Math.PI / 180;
+  return {
+    x: cx + Math.cos(rad) * radius,
+    y: cy + Math.sin(rad) * radius,
+  };
+}
+
+function windSectorPath(min, max, cx = 50, cy = 50, r = 36) {
+  const start = pointForBearing(min, r, cx, cy);
+  const end = pointForBearing(max, r, cx, cy);
+  const delta = ((max - min + 360) % 360) || 360;
+  const largeArc = delta > 180 ? 1 : 0;
+  return `M ${cx} ${cy} L ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 1 ${end.x} ${end.y} Z`;
+}
+
+function addMapCompassOverlay(map, minBearing, maxBearing) {
+  const container = map.getContainer();
+  const existing = container.querySelector('.map-compass-overlay');
+  if (existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.className = 'map-compass-overlay';
+  const hasSector = Number.isFinite(minBearing) && Number.isFinite(maxBearing);
+  const sector = hasSector
+    ? `<path d="${windSectorPath(minBearing, maxBearing)}" fill="rgba(13,110,253,0.22)"
+         stroke="#0d6efd" stroke-width="1.5"/>`
+    : '';
+  const label = hasSector
+    ? `<text x="50" y="96" class="compass-label">Wind ${formatBearing(minBearing)}°–${formatBearing(maxBearing)}°</text>`
+    : `<text x="50" y="96" class="compass-label">Wind unset</text>`;
+  overlay.innerHTML = `
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="50" cy="50" r="38" fill="#ffffff" fill-opacity="0.9" stroke="#343a40" stroke-width="1.5"/>
+  ${sector}
+  <circle cx="50" cy="50" r="3" fill="#343a40"/>
+  <path d="M50 12 L50 24 M50 76 L50 88 M12 50 L24 50 M76 50 L88 50" stroke="#343a40" stroke-width="1.5"/>
+  <text x="50" y="22" class="compass-label">N</text>
+  <text x="82" y="54" class="compass-label">E</text>
+  <text x="50" y="88" class="compass-label">S</text>
+  <text x="18" y="54" class="compass-label">W</text>
+  ${label}
+</svg>`;
+  container.appendChild(overlay);
 }
 
 // Draw a polyline with direction-of-travel arrows; tags decorator for easy removal
@@ -816,17 +903,24 @@ function openViewModal(courseId) {
       <span class="ms-2 text-muted small">${course.committee_boat.lat.toFixed(4)}, ${course.committee_boat.lon.toFixed(4)}</span>
     </div>`;
   }
-  document.getElementById('viewMarkList').innerHTML = listHtml;
+  const windInfo = Number.isFinite(course.wind_bearing_min) && Number.isFinite(course.wind_bearing_max)
+    ? `<div class="mark-row mt-2 pt-2" style="border-top:2px solid #0d6efd">
+         <span class="mark-badge" style="background:#0dcaf0;color:#000;border-radius:4px">W</span>
+         <span class="fw-semibold">Wind</span>
+         <span class="ms-2 text-muted small">${formatBearing(course.wind_bearing_min)}° – ${formatBearing(course.wind_bearing_max)}°</span>
+       </div>`
+    : '';
+  document.getElementById('viewMarkList').innerHTML = listHtml + windInfo;
 
   const modal = new bootstrap.Modal(document.getElementById('viewModal'));
   modal.show();
 
   document.getElementById('viewModal').addEventListener('shown.bs.modal', () => {
-    initViewMap(marks, course.committee_boat || null);
+    initViewMap(marks, course.committee_boat || null, course.wind_bearing_min, course.wind_bearing_max);
   }, { once: true });
 }
 
-function initViewMap(markIds, committeeBoat) {
+function initViewMap(markIds, committeeBoat, windMin, windMax) {
   if (S.viewMap) { S.viewMap.remove(); S.viewMap = null; }
   const map = L.map('viewMap');
   S.viewMap = map;
@@ -881,6 +975,7 @@ function initViewMap(markIds, committeeBoat) {
   } else {
     map.setView([50.87, -1.37], 12);
   }
+  addMapCompassOverlay(map, normalizeBearingValue(windMin), normalizeBearingValue(windMax));
   map.invalidateSize();
 }
 
@@ -908,7 +1003,11 @@ function openCourseEditor(courseId) {
   // Marks + committee boat — normalise legacy string marks to {wp, rounding} objects
   S.editorMarks = (course?.marks || []).map(normaliseMark);
   S.committeeBoat = course?.committee_boat || null;
+  S.windBearingMin = normalizeBearingValue(course?.wind_bearing_min);
+  S.windBearingMax = normalizeBearingValue(course?.wind_bearing_max);
   S.placingCB = false;
+  document.getElementById('editorWindMin').value = S.windBearingMin != null ? S.windBearingMin : '';
+  document.getElementById('editorWindMax').value = S.windBearingMax != null ? S.windBearingMax : '';
   renderEditorMarkList();
   renderCBStatus();
 
@@ -1085,7 +1184,14 @@ function updateEditorMap() {
     if (!markLatlngs.length) S.editorMap.setView([S.committeeBoat.lat, S.committeeBoat.lon], 13);
   }
 
+  addMapCompassOverlay(S.editorMap, S.windBearingMin, S.windBearingMax);
   S.editorMap.invalidateSize();
+}
+
+function updateEditorWind() {
+  S.windBearingMin = normalizeBearingValue(document.getElementById('editorWindMin').value);
+  S.windBearingMax = normalizeBearingValue(document.getElementById('editorWindMax').value);
+  addMapCompassOverlay(S.editorMap, S.windBearingMin, S.windBearingMax);
 }
 
 async function saveEditorCourse() {
@@ -1094,7 +1200,14 @@ async function saveEditorCourse() {
   if (!name) { alert('Please enter a course name.'); return; }
   if (!stId)  { alert('Please select a series type.'); return; }
 
-  const payload = { name, series_type_id: stId, marks: S.editorMarks, committee_boat: S.committeeBoat };
+  const payload = {
+    name,
+    series_type_id: stId,
+    marks: S.editorMarks,
+    committee_boat: S.committeeBoat,
+    wind_bearing_min: S.windBearingMin,
+    wind_bearing_max: S.windBearingMax,
+  };
   const url     = S.editingCourseId ? `/api/courses/${S.editingCourseId}` : '/api/courses';
   const method  = S.editingCourseId ? 'PUT' : 'POST';
 
