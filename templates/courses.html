@@ -498,31 +498,19 @@ function makeWpDotIcon(wp) {
   });
 }
 
-// Smooth a polyline by subdividing segments with Chaikin's corner-cutting.
-function smoothCourseLine(latlngs, iterations = 1) {
-  if (!latlngs || latlngs.length < 3) return latlngs;
-  let points = latlngs;
-  for (let iter = 0; iter < iterations; iter++) {
-    const next = [points[0]];
-    for (let i = 0; i < points.length - 1; i++) {
-      const [lat1, lon1] = points[i];
-      const [lat2, lon2] = points[i + 1];
-      next.push([lat1 * 0.75 + lat2 * 0.25, lon1 * 0.75 + lon2 * 0.25]);
-      next.push([lat1 * 0.25 + lat2 * 0.75, lon1 * 0.25 + lon2 * 0.75]);
-    }
-    next.push(points[points.length - 1]);
-    points = next;
-  }
-  return points;
-}
-
 // Draw a polyline with direction-of-travel arrows; tags decorator for easy removal
 function drawCourseRoute(map, latlngs, color) {
   if (!latlngs || latlngs.length < 2) return;
-  const smoothLatlngs = smoothCourseLine(latlngs, 1);
-  L.polyline(smoothLatlngs, { color, weight: 2.5, dashArray: '7 4', opacity: 0.85 }).addTo(map);
+  L.polyline(latlngs, {
+    color,
+    weight: 2.5,
+    dashArray: '7 4',
+    opacity: 0.85,
+    lineJoin: 'round',
+    lineCap: 'round',
+  }).addTo(map);
   if (typeof L.polylineDecorator !== 'undefined') {
-    const dec = L.polylineDecorator(smoothLatlngs, {
+    const dec = L.polylineDecorator(latlngs, {
       patterns: [{
         offset: 35, repeat: 85,
         symbol: L.Symbol.arrowHead({
