@@ -5,34 +5,36 @@
     "series_type_id": "1780088857250",
     "marks": [
       {
-        "wp": "7S",
-        "rounding": "S"
+        "rounding": "S",
+        "wp": "7S"
       },
       {
-        "wp": "HI2",
-        "rounding": "S"
+        "rounding": "S",
+        "wp": "HI2"
       },
       {
-        "wp": "7R",
-        "rounding": "P"
+        "rounding": "P",
+        "wp": "7R"
       },
       {
-        "wp": "7N",
-        "rounding": "P"
+        "rounding": "P",
+        "wp": "7N"
       },
       {
-        "wp": "HI1",
-        "rounding": "P"
+        "rounding": "P",
+        "wp": "HI1"
       },
       {
-        "wp": "7S",
-        "rounding": "S"
+        "rounding": "S",
+        "wp": "7S"
       }
     ],
     "committee_boat": {
       "lat": 50.85583654198437,
       "lon": -1.3594722747802734
-    }
+    },
+    "wind_bearing_min": 45,
+    "wind_bearing_max": 135
   },
   {
     "id": "1780091894517",
@@ -40,34 +42,36 @@
     "series_type_id": "1780088857250",
     "marks": [
       {
-        "wp": "7N",
-        "rounding": "S"
+        "rounding": "S",
+        "wp": "7N"
       },
       {
-        "wp": "HI2",
-        "rounding": "P"
+        "rounding": "P",
+        "wp": "HI2"
       },
       {
-        "wp": "7R",
-        "rounding": "P"
+        "rounding": "P",
+        "wp": "7R"
       },
       {
-        "wp": "7I",
-        "rounding": "P"
+        "rounding": "P",
+        "wp": "7I"
       },
       {
-        "wp": "HI1",
-        "rounding": "P"
+        "rounding": "P",
+        "wp": "HI1"
       },
       {
-        "wp": "7N",
-        "rounding": "S"
+        "rounding": "S",
+        "wp": "7N"
       }
     ],
     "committee_boat": {
       "lat": 50.862906843674345,
       "lon": -1.3695342930948429
-    }
+    },
+    "wind_bearing_min": 130,
+    "wind_bearing_max": 270
   },
   {
     "id": "1780092074761",
