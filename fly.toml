@@ -1,20 +1,30 @@
-app = "swsa-courses"
-primary_region = "lhr"
+# fly.toml app configuration file generated for swsa-courses on 2026-06-04T22:42:45Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'swsa-courses'
+primary_region = 'lhr'
 
 [build]
 
 [env]
-  PORT = "8081"
-  COURSES_DIR = "/data"
+  COURSES_DIR = '/data'
+  PORT = '8081'
+
+[[mounts]]
+  source = 'swsa_courses_data'
+  destination = '/data'
 
 [http_service]
   internal_port = 8081
   force_https = true
-  auto_stop_machines = false
+  auto_stop_machines = 'off'
   auto_start_machines = true
   min_machines_running = 1
-  max_machines = 1
 
-[[mounts]]
-  source = "swsa_courses_data"
-  destination = "/data"
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 256
