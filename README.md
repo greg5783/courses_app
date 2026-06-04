@@ -78,3 +78,13 @@ fly deploy
 The app listens on port `8081` inside the container, which is configured in `fly.toml`.
 
 If the app name is already taken, choose a different name and update the `app` field in `fly.toml`.
+
+## Health check
+
+The app exposes a lightweight endpoint at `/health` for Fly or other load balancers.
+
+Example:
+
+```bash
+curl https://<your-app>.fly.dev/health
+```

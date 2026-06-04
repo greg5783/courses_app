@@ -79,6 +79,11 @@ def api_data():
     })
 
 
+@app.route('/health')
+def health():
+    return jsonify({'status': 'ok', 'service': 'courses-app'}), 200
+
+
 # ── Waypoints ─────────────────────────────────────────────────────────────────
 
 @app.route('/api/waypoints', methods=['POST'])

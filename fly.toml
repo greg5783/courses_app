@@ -8,7 +8,7 @@ kill_timeout = 5
 
 [[services]]
   internal_port = 8081
-  protocol = "tcp"
+  protocol = "http"
 
   [[services.ports]]
     port = 80
@@ -16,8 +16,9 @@ kill_timeout = 5
   [[services.ports]]
     port = 443
 
-  [services.tcp_checks]
-    grace_period = "10s"
+  [services.http_checks]
+    path = "/health"
     interval = "15s"
-    port = 8081
     timeout = "2s"
+    grace_period = "10s"
+    method = "GET"
