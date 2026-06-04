@@ -54,3 +54,27 @@ gunicorn -b 0.0.0.0:8081 courses_app:app
 - `courses_data/` — JSON data files
 - `templates/` — Flask HTML templates
 - `static/` — CSS and assets
+- `Dockerfile` — container build image for production
+- `fly.toml` — Fly.io deployment configuration
+
+## Deploy on Fly.io
+
+This app can be deployed to Fly.io using the included `Dockerfile` and `fly.toml`.
+
+1. Install the Fly CLI: https://fly.io/docs/hands-on/install-fly/
+2. Log in and create or select an app:
+
+```bash
+fly auth login
+fly apps create courses-app-greg5783
+```
+
+3. Deploy:
+
+```bash
+fly deploy
+```
+
+The app listens on port `8081` inside the container, which is configured in `fly.toml`.
+
+If the app name is already taken, choose a different name and update the `app` field in `fly.toml`.

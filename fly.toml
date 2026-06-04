@@ -1,0 +1,26 @@
+app = "courses-app-greg5783"
+
+kill_signal = "SIGINT"
+kill_timeout = 5
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8081"
+
+[[services]]
+  internal_port = 8081
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 80
+
+  [[services.ports]]
+    port = 443
+
+  [services.tcp_checks]
+    grace_period = "10s"
+    interval = "15s"
+    port = 8081
+    timeout = "2s"
