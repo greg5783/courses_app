@@ -858,7 +858,8 @@ function initViewMap(markIds, committeeBoat) {
 
   // OOB overlays, then course line offset by rounding and routed around OOB areas
   drawObsPolygons(map);
-  drawCourseRoute(map, buildRoutedPath(roundingOffsetPositions(markIds)), '#0d6efd');
+  const coursePath = buildRoutedPath(roundingOffsetPositions(markIds));
+  drawCourseRoute(map, coursePath, '#0d6efd');
 
   // Committee boat — not on the course line
   if (committeeBoat) {
@@ -868,9 +869,18 @@ function initViewMap(markIds, committeeBoat) {
     markLatlngs.push([committeeBoat.lat, committeeBoat.lon]);
   }
 
-  const allPts = [...S.waypoints.map(w => [w.lat, w.lon]), ...markLatlngs];
-  if (allPts.length) map.fitBounds(L.latLngBounds(allPts).pad(0.05));
-  else map.setView([50.87, -1.37], 12);
+  if (coursePath.length > 1) {
+    const bounds = L.latLngBounds(coursePath);
+    if (markLatlngs.length) bounds.extend(markLatlngs);
+    const size = map.getSize();
+    map.fitBounds(bounds, {
+      padding: [Math.round(size.x * 0.10), Math.round(size.y * 0.10)],
+    });
+  } else if (markLatlngs.length === 1) {
+    map.setView(markLatlngs[0], 13);
+  } else {
+    map.setView([50.87, -1.37], 12);
+  }
   map.invalidateSize();
 }
 
