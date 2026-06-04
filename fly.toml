@@ -1,4 +1,4 @@
-app = "courses-app-greg5783"
+app = "swsa-courses"
 
 kill_signal = "SIGINT"
 kill_timeout = 5
