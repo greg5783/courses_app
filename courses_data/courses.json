@@ -1,0 +1,137 @@
+[
+  {
+    "id": "1780091160589",
+    "name": "C",
+    "series_type_id": "1780088857250",
+    "marks": [
+      {
+        "wp": "7S",
+        "rounding": "S"
+      },
+      {
+        "wp": "HI2",
+        "rounding": "S"
+      },
+      {
+        "wp": "7R",
+        "rounding": "P"
+      },
+      {
+        "wp": "7N",
+        "rounding": "P"
+      },
+      {
+        "wp": "HI1",
+        "rounding": "P"
+      },
+      {
+        "wp": "7S",
+        "rounding": "S"
+      }
+    ],
+    "committee_boat": {
+      "lat": 50.85583654198437,
+      "lon": -1.3594722747802734
+    }
+  },
+  {
+    "id": "1780091894517",
+    "name": "B",
+    "series_type_id": "1780088857250",
+    "marks": [
+      {
+        "wp": "7N",
+        "rounding": "S"
+      },
+      {
+        "wp": "HI2",
+        "rounding": "P"
+      },
+      {
+        "wp": "7R",
+        "rounding": "P"
+      },
+      {
+        "wp": "7I",
+        "rounding": "P"
+      },
+      {
+        "wp": "HI1",
+        "rounding": "P"
+      },
+      {
+        "wp": "7N",
+        "rounding": "S"
+      }
+    ],
+    "committee_boat": {
+      "lat": 50.862906843674345,
+      "lon": -1.3695342930948429
+    }
+  },
+  {
+    "id": "1780092074761",
+    "name": "L Class 1",
+    "series_type_id": "1780088857250",
+    "marks": [
+      "7T",
+      "7N",
+      "HI1",
+      "7K",
+      "7T",
+      "7U",
+      "7W",
+      "7S",
+      "7N",
+      "7T"
+    ],
+    "committee_boat": null
+  },
+  {
+    "id": "1780606111500",
+    "name": "L Class 2",
+    "series_type_id": "1780088857250",
+    "marks": [
+      {
+        "wp": "7T",
+        "rounding": "S"
+      },
+      {
+        "wp": "7N",
+        "rounding": "S"
+      },
+      {
+        "wp": "7K",
+        "rounding": "S"
+      },
+      {
+        "wp": "7T",
+        "rounding": "S"
+      },
+      {
+        "wp": "7U",
+        "rounding": "P"
+      },
+      {
+        "wp": "7W",
+        "rounding": "S"
+      },
+      {
+        "wp": "7S",
+        "rounding": "S"
+      },
+      {
+        "wp": "7N",
+        "rounding": "S"
+      },
+      {
+        "wp": "7T",
+        "rounding": "S"
+      }
+    ],
+    "committee_boat": {
+      "lat": 50.870978137947134,
+      "lon": -1.3605239023523774
+    }
+  }
+]

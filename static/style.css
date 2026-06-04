@@ -1,0 +1,405 @@
+@import url('https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap');
+
+:root {
+  --hsc-gold:       #FFD936;
+  --hsc-gold-dark:  #DAB200;
+  --hsc-green:      #536942;
+  --hsc-green-75:   rgba(83, 105, 66, 0.75);
+  --hsc-green-50:   rgba(83, 105, 66, 0.5);
+  --hsc-green-20:   rgba(83, 105, 66, 0.12);
+  --hsc-cream:      #F6F8F5;
+  --hsc-white:      #FFFFFF;
+}
+
+/* ── Base ─────────────────────────────────────────────────────────────── */
+body {
+  background: var(--hsc-cream);
+  font-family: 'Lato', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.7;
+  color: #333;
+}
+
+/* ── Header ───────────────────────────────────────────────────────────── */
+.app-header {
+  background: var(--hsc-white);
+  border-bottom: 3px solid var(--hsc-gold);
+  padding: 0.9rem 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.app-header h1 {
+  color: var(--hsc-green);
+  font-weight: 700;
+  letter-spacing: -1px;
+  font-size: 1.4rem;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.app-header .subtitle {
+  color: var(--hsc-green-75);
+  font-size: 0.82rem;
+}
+
+/* ── Cards ────────────────────────────────────────────────────────────── */
+.card {
+  border: 1px solid rgba(83, 105, 66, 0.18) !important;
+  border-radius: 4px !important;
+  background: var(--hsc-white);
+  box-shadow: none !important;
+}
+
+.card-title {
+  color: var(--hsc-green);
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.card-body > h6 {
+  color: var(--hsc-green);
+  font-weight: 700;
+}
+
+/* ── Nav tabs ─────────────────────────────────────────────────────────── */
+.nav-tabs {
+  border-bottom: 2px solid var(--hsc-gold);
+}
+
+.nav-tabs .nav-link {
+  color: var(--hsc-green);
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  font-weight: 400;
+  padding: 0.55rem 1rem;
+  border-radius: 0;
+}
+
+.nav-tabs .nav-link:hover {
+  color: var(--hsc-green);
+  background: rgba(255, 217, 54, 0.2);
+  border-color: transparent;
+}
+
+.nav-tabs .nav-link.active {
+  color: var(--hsc-green);
+  background: var(--hsc-gold);
+  border-color: var(--hsc-gold);
+  font-weight: 700;
+}
+
+/* Tab content wrapper */
+.tab-content.border {
+  border-color: rgba(83, 105, 66, 0.2) !important;
+  border-top: none !important;
+  border-radius: 0 0 4px 4px !important;
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────────── */
+.btn {
+  border-radius: 4px;
+  font-weight: 400;
+  transition: all 0.2s linear;
+}
+
+.btn-primary,
+.btn-primary:focus {
+  background-color: var(--hsc-gold);
+  border-color: var(--hsc-gold);
+  color: var(--hsc-green);
+  font-weight: 700;
+}
+.btn-primary:hover,
+.btn-primary:active,
+.btn-primary:focus-visible {
+  background-color: var(--hsc-gold-dark);
+  border-color: var(--hsc-gold-dark);
+  color: var(--hsc-green);
+}
+
+.btn-outline-primary {
+  border-color: var(--hsc-green-50);
+  color: var(--hsc-green);
+}
+.btn-outline-primary:hover,
+.btn-outline-primary:active {
+  background-color: var(--hsc-gold);
+  border-color: var(--hsc-gold);
+  color: var(--hsc-green);
+}
+
+.btn-secondary {
+  background-color: var(--hsc-green);
+  border-color: var(--hsc-green);
+  color: var(--hsc-white);
+}
+.btn-secondary:hover,
+.btn-secondary:active {
+  background-color: #3e5030;
+  border-color: #3e5030;
+  color: var(--hsc-white);
+}
+
+.btn-outline-secondary {
+  border-color: var(--hsc-green-50);
+  color: var(--hsc-green);
+}
+.btn-outline-secondary:hover {
+  background-color: var(--hsc-green);
+  border-color: var(--hsc-green);
+  color: var(--hsc-white);
+}
+
+/* Result sub-tab active state only */
+.result-tabs .btn-outline-secondary.active {
+  background-color: var(--hsc-gold);
+  border-color: var(--hsc-gold);
+  color: var(--hsc-green);
+  font-weight: 700;
+}
+
+.btn-success {
+  background-color: var(--hsc-green);
+  border-color: var(--hsc-green);
+  color: var(--hsc-white);
+}
+.btn-success:hover,
+.btn-success:active {
+  background-color: #3e5030;
+  border-color: #3e5030;
+  color: var(--hsc-white);
+}
+
+.btn-outline-info {
+  border-color: var(--hsc-green-50);
+  color: var(--hsc-green);
+}
+.btn-outline-info:hover,
+.btn-outline-info:active {
+  background-color: var(--hsc-gold);
+  border-color: var(--hsc-gold);
+  color: var(--hsc-green);
+}
+
+.btn-danger { border-radius: 4px; }
+
+/* xs size helper (competitor table actions) */
+.btn-xs {
+  font-size: 0.73rem;
+  padding: 0.15rem 0.45rem;
+}
+
+/* ── Badges ───────────────────────────────────────────────────────────── */
+.badge.bg-primary {
+  background-color: var(--hsc-green) !important;
+}
+
+.badge.bg-secondary {
+  background-color: var(--hsc-green-20) !important;
+  color: var(--hsc-green) !important;
+}
+
+/* ── Tables ───────────────────────────────────────────────────────────── */
+.table thead th {
+  background-color: var(--hsc-green-20);
+  color: var(--hsc-green);
+  font-weight: 700;
+  border-bottom-color: rgba(83, 105, 66, 0.25);
+}
+
+table.dataTable thead th {
+  background: var(--hsc-green-20);
+  color: var(--hsc-green);
+}
+
+.table-light {
+  background-color: var(--hsc-green-20) !important;
+  --bs-table-bg: var(--hsc-green-20);
+  color: var(--hsc-green);
+}
+
+/* ── Combined results table ───────────────────────────────────────────── */
+.combined-results-table th,
+.combined-results-table td {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.combined-boat {
+  font-size: 0.95rem;
+}
+.combined-cell {
+  padding: 0.35rem 0.5rem !important;
+  line-height: 1.25;
+}
+.combined-pos {
+  font-weight: 700;
+  font-size: 1rem;
+}
+.combined-cor {
+  font-size: 0.78rem;
+  color: #555;
+}
+.combined-ela {
+  font-size: 0.75rem;
+  color: #aaa;
+}
+
+/* ── Form controls ────────────────────────────────────────────────────── */
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--hsc-gold);
+  box-shadow: 0 0 0 0.2rem rgba(255, 217, 54, 0.3);
+}
+
+.form-check-input:checked {
+  background-color: var(--hsc-green);
+  border-color: var(--hsc-green);
+}
+
+.form-check-input:focus {
+  border-color: var(--hsc-gold);
+  box-shadow: 0 0 0 0.2rem rgba(255, 217, 54, 0.3);
+}
+
+/* ── List groups ──────────────────────────────────────────────────────── */
+.list-group-item {
+  border-color: rgba(83, 105, 66, 0.15);
+}
+
+/* ── Modals ───────────────────────────────────────────────────────────── */
+.modal-header {
+  background-color: var(--hsc-cream);
+  border-bottom: 2px solid var(--hsc-gold);
+}
+
+.modal-title {
+  color: var(--hsc-green);
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.modal-footer {
+  border-top: 1px solid rgba(83, 105, 66, 0.15);
+}
+
+/* ── Spinner ──────────────────────────────────────────────────────────── */
+.spinner-border {
+  color: var(--hsc-green) !important;
+}
+
+/* ── Text helpers ─────────────────────────────────────────────────────── */
+.text-muted {
+  color: var(--hsc-green-75) !important;
+}
+
+.text-uppercase.text-muted.small.fw-semibold {
+  color: var(--hsc-green-75) !important;
+  letter-spacing: 0.06em;
+}
+
+/* ── Series tab links ─────────────────────────────────────────────────── */
+.series-tab-link {
+  color: var(--hsc-green);
+}
+.series-tab-link:hover {
+  color: var(--hsc-gold-dark);
+}
+
+/* ── Horizontal rule ──────────────────────────────────────────────────── */
+hr {
+  border-color: rgba(83, 105, 66, 0.2);
+}
+
+/* ── Nautical number pennants ─────────────────────────────────────────────
+   Triangular flags, tip pointing right, colours from the International
+   Code of Signals numeral pennants used in yacht racing.
+   ─────────────────────────────────────────────────────────────────────── */
+.fleet-pennant {
+  display: inline-block;
+  width: 30px;
+  height: 19px;
+  vertical-align: middle;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+  margin-right: 5px;
+  flex-shrink: 0;
+}
+
+/* 1 — White field, red disc */
+.fleet-pennant-1 {
+  background: radial-gradient(circle at 38% 50%, #C8102E 28%, #FFFFFF 28%);
+}
+
+/* 2 — Blue field, white disc */
+.fleet-pennant-2 {
+  background: radial-gradient(circle at 38% 50%, #FFFFFF 28%, #003DA5 28%);
+}
+
+/* 3 — Blue / White / Red horizontal thirds */
+.fleet-pennant-3 {
+  background: linear-gradient(
+    to bottom,
+    #003DA5 0%, #003DA5 33.3%,
+    #FFFFFF 33.3%, #FFFFFF 66.6%,
+    #C8102E 66.6%, #C8102E 100%
+  );
+}
+
+/* 4 — Red / White / Blue vertical thirds */
+.fleet-pennant-4 {
+  background: linear-gradient(
+    to right,
+    #C8102E 0%, #C8102E 33.3%,
+    #FFFFFF 33.3%, #FFFFFF 66.6%,
+    #003DA5 66.6%, #003DA5 100%
+  );
+}
+
+/* 5 — Yellow field, blue horizontal centre band */
+.fleet-pennant-5 {
+  background: linear-gradient(
+    to bottom,
+    #F4C400 0%, #F4C400 30%,
+    #003DA5 30%, #003DA5 70%,
+    #F4C400 70%, #F4C400 100%
+  );
+}
+
+/* 6 — White / Blue diagonal halves */
+.fleet-pennant-6 {
+  background: linear-gradient(135deg, #FFFFFF 50%, #003DA5 50%);
+}
+
+/* Larger variant for chart section headers */
+.fleet-pennant-lg {
+  width: 38px;
+  height: 24px;
+  margin-right: 7px;
+}
+
+/* Fleet badge row in chart section headers */
+.fleet-chart-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--hsc-green);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 0.4rem;
+}
+
+.race-status-cell {
+  min-width: 130px;
+}
+
+@media (max-width: 575.98px) {
+  .race-corrected-col,
+  .race-corrected-cell {
+    display: none;
+  }
+
+  .race-status-cell {
+    min-width: 110px;
+  }
+}

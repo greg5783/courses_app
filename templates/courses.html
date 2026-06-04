@@ -1,0 +1,1607 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SWSA Course Planner</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet">
+  <style>
+    body { background: #f8f9fa; }
+    .sidebar-item {
+      cursor: pointer;
+      border-left: 3px solid transparent;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .sidebar-item:hover  { background: #e9ecef; }
+    .sidebar-item.active { border-left-color: #0d6efd; background: #e7f1ff; font-weight: 600; }
+    .course-card { cursor: pointer; transition: box-shadow 0.15s; }
+    .course-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.12); }
+    .mark-badge {
+      display: inline-block; width: 24px; height: 24px; border-radius: 50%;
+      text-align: center; line-height: 24px; font-size: 11px; font-weight: 700;
+      color: #fff; margin-right: 6px; flex-shrink: 0;
+    }
+    .mark-row { display: flex; align-items: center; padding: 5px 0; border-bottom: 1px solid #f0f0f0; }
+    .mark-row:last-child { border-bottom: none; }
+    .leaflet-map { border-radius: 8px; }
+    #viewMap, #editorMap { height: 420px; border-radius: 8px; }
+    .wp-color-swatch {
+      display: inline-block; width: 14px; height: 14px; border-radius: 3px;
+      border: 1px solid #aaa; vertical-align: middle; margin-right: 4px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar navbar-dark bg-dark px-3">
+  <span class="navbar-brand fw-bold">⛵ SWSA Course Planner</span>
+  <div class="d-flex gap-2 align-items-center">
+    {% if logged_in %}
+      <span class="text-light small me-2">Admin</span>
+      <form method="post" action="/logout" class="d-inline">
+        <button class="btn btn-outline-light btn-sm">Log out</button>
+      </form>
+    {% else %}
+      <button class="btn btn-outline-light btn-sm" data-bs-toggle="modal" data-bs-target="#loginModal">Log in</button>
+    {% endif %}
+  </div>
+</nav>
+
+<!-- Main layout -->
+<div class="container-fluid py-3">
+  <div class="row g-3">
+
+    <!-- Sidebar: series types -->
+    <div class="col-lg-3">
+      <div class="card h-100">
+        <div class="card-header d-flex justify-content-between align-items-center py-2">
+          <span class="fw-semibold small">Series types</span>
+          {% if logged_in %}
+          <button class="btn btn-outline-primary btn-sm py-0" onclick="openSeriesTypeModal(null)">+ Add</button>
+          {% endif %}
+        </div>
+        <div class="list-group list-group-flush" id="seriesList">
+          <div class="list-group-item text-muted small">Loading…</div>
+        </div>
+        <div class="card-footer py-2 d-flex flex-column gap-1">
+          <button class="btn btn-outline-secondary btn-sm w-100" onclick="openWaypointsModal()">
+            📍 Manage waypoints
+          </button>
+          <button class="btn btn-outline-danger btn-sm w-100" onclick="openObsModal()">
+            🚫 Out-of-bounds areas
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main: courses -->
+    <div class="col-lg-9">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center py-2" id="coursesHeader">
+          <span class="fw-semibold" id="coursesTitle">Select a series type</span>
+          {% if logged_in %}
+          <button class="btn btn-primary btn-sm d-none" id="addCourseBtn" onclick="openCourseEditor(null)">+ Add course</button>
+          {% endif %}
+        </div>
+        <div class="card-body" id="coursesBody">
+          <p class="text-muted">Select a series type from the left panel.</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+
+<!-- ── Course view modal ───────────────────────────────────────────────── -->
+<div class="modal fade" id="viewModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="viewModalTitle">Course</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="viewMap" class="mb-3 leaflet-map"></div>
+        <h6 class="fw-semibold mb-2">Marks in order</h6>
+        <div id="viewMarkList"></div>
+      </div>
+      <div class="modal-footer">
+        {% if logged_in %}
+        <button class="btn btn-outline-primary" id="viewEditBtn">Edit course</button>
+        {% endif %}
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── Course editor modal ────────────────────────────────────────────── -->
+<div class="modal fade" id="editorModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="editorModalTitle">New course</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Course name</label>
+            <input type="text" class="form-control" id="editorName" placeholder="e.g. Olympic Triangle">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Series type</label>
+            <select class="form-select" id="editorSeriesType"></select>
+          </div>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-lg-5">
+            <label class="form-label fw-semibold">Add mark</label>
+            <div class="input-group mb-1">
+              <select class="form-select" id="editorWpSelect"></select>
+              <button class="btn btn-outline-primary" onclick="editorAddMark()">Add</button>
+            </div>
+            <div class="mb-2">
+              <button class="btn btn-outline-secondary btn-sm w-100" onclick="addCustomMark()"
+                      title="Add a free-position mark not from the waypoints list">+ Custom mark</button>
+            </div>
+            <div id="editorMarkList" class="border rounded p-2" style="min-height:120px;">
+              <p class="text-muted small mb-0" id="editorNoMarks">No marks yet.</p>
+            </div>
+            <div class="mt-2 d-flex gap-2 align-items-center">
+              <button class="btn btn-outline-warning btn-sm" id="cbPlaceBtn" onclick="startPlacingCB()">⚓ Place committee boat</button>
+              <button class="btn btn-outline-danger btn-sm d-none" id="cbRemoveBtn" onclick="removeCB()">Remove CB</button>
+            </div>
+          </div>
+          <div class="col-lg-7">
+            <label class="form-label fw-semibold">Preview</label>
+            <div id="editorMap" class="leaflet-map"></div>
+            <p class="text-muted mt-1 mb-0" style="font-size:11px">💡 Drag any mark to update its position</p>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-danger me-auto d-none" id="editorDeleteBtn" onclick="deleteCourseFromEditor()">Delete course</button>
+        <button class="btn btn-primary" onclick="saveEditorCourse()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── Series type modal ──────────────────────────────────────────────── -->
+<div class="modal fade" id="seriesTypeModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="stModalTitle">Series type</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="stModalId">
+        <label class="form-label">Name</label>
+        <input type="text" class="form-control" id="stModalName" placeholder="e.g. Bartley Disc">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-danger me-auto d-none" id="stDeleteBtn" onclick="deleteSeriesType()">Delete</button>
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" onclick="saveSeriesType()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── Waypoints manager modal ────────────────────────────────────────── -->
+<div class="modal fade" id="waypointsModal" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h5 class="modal-title">Waypoints — Zone 7 Southampton Water</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+        <div id="wpMap" style="height:360px;border-bottom:1px solid #dee2e6"></div>
+        {% if logged_in %}
+        <p class="text-muted px-3 pt-2 mb-1" style="font-size:11px">
+          💡 Drag any mark on the map to reposition it — you'll be asked to confirm before saving.
+        </p>
+        {% endif %}
+        <div style="max-height:280px;overflow-y:auto">
+          <table class="table table-sm table-hover mb-0" id="wpTable">
+            <thead class="table-light sticky-top">
+              <tr>
+                <th>Code</th><th>Name</th><th>Type</th>
+                <th>Lat</th><th>Lon</th>
+                {% if logged_in %}<th></th>{% endif %}
+              </tr>
+            </thead>
+            <tbody id="wpTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+      {% if logged_in %}
+      <div class="modal-footer justify-content-start py-2">
+        <button class="btn btn-outline-primary btn-sm" onclick="openWpEditor(null)">+ Add waypoint</button>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+
+<!-- ── Waypoint editor modal ──────────────────────────────────────────── -->
+<div class="modal fade" id="wpEditorModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="wpEditorTitle">Waypoint</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="wpEditorId">
+        <div class="row g-2">
+          <div class="col-6">
+            <label class="form-label small">Code</label>
+            <input type="text" class="form-control form-control-sm" id="wpEditorCode" placeholder="e.g. 7A">
+          </div>
+          <div class="col-6">
+            <label class="form-label small">Colour</label>
+            <select class="form-select form-select-sm" id="wpEditorColor">
+              <option value="">—</option>
+              <option value="R">R — Red</option>
+              <option value="G">G — Green</option>
+              <option value="Y">Y — Yellow</option>
+              <option value="YB">YB — Yellow/Black</option>
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label small">Name</label>
+            <input type="text" class="form-control form-control-sm" id="wpEditorName" placeholder="Waypoint name">
+          </div>
+          <div class="col-6">
+            <label class="form-label small">Latitude (°N)</label>
+            <input type="number" step="0.0001" class="form-control form-control-sm" id="wpEditorLat" placeholder="50.8700">
+          </div>
+          <div class="col-6">
+            <label class="form-label small">Longitude (°E)</label>
+            <input type="number" step="0.0001" class="form-control form-control-sm" id="wpEditorLon" placeholder="-1.3700">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-danger me-auto d-none" id="wpDeleteBtn" onclick="deleteWaypoint()">Delete</button>
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="saveWaypoint()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── Mark type picker modal ─────────────────────────────────────────── -->
+<div class="modal fade" id="markTypeModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header pb-1">
+        <div>
+          <h5 class="modal-title mb-0">Choose mark appearance</h5>
+          <p class="text-muted small mb-0" id="markTypeModalWpName"></p>
+        </div>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="markTypeGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── Out-of-bounds modal ────────────────────────────────────────────── -->
+<div class="modal fade" id="obsModal" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h5 class="modal-title">Out-of-bounds areas</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+        <div id="obMap" style="height:400px;border-bottom:1px solid #dee2e6"></div>
+        {% if logged_in %}
+        <div class="px-3 pt-2 pb-2 d-flex gap-2 align-items-center flex-wrap border-bottom">
+          <button class="btn btn-outline-danger btn-sm" id="obDrawBtn" onclick="startDrawingOb()">+ Draw polygon</button>
+          <button class="btn btn-outline-secondary btn-sm d-none" id="obCancelDrawBtn" onclick="cancelDrawingOb()">Cancel</button>
+          <button class="btn btn-success btn-sm d-none" id="obFinishDrawBtn" onclick="finishDrawingOb()">Finish polygon</button>
+          <span class="text-muted small" id="obDrawHint"></span>
+        </div>
+        {% endif %}
+        <div style="max-height:200px;overflow-y:auto">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light sticky-top">
+              <tr>
+                <th class="ps-3">Name</th>
+                <th>Vertices</th>
+                {% if logged_in %}<th></th>{% endif %}
+              </tr>
+            </thead>
+            <tbody id="obTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── Login modal ────────────────────────────────────────────────────── -->
+<div class="modal fade" id="loginModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Log in</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="/login">
+        <div class="modal-body">
+          <label class="form-label">Password</label>
+          <input type="password" class="form-control" name="password" autofocus>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary w-100">Log in</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet-polylinedecorator@1.6.0/dist/leaflet.polylineDecorator.min.js"></script>
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+const S = {
+  waypoints: [],
+  seriesTypes: [],
+  courses: [],
+  outOfBounds: [],       // [{id, name, coords:[[lat,lon],...]}]
+  selectedStId: null,
+  viewingCourseId: null,
+  editingCourseId: null,
+  editorMarks: [],       // array of waypoint ID strings OR custom mark objects
+  committeeBoat: null,   // {lat, lon} or null
+  placingCB: false,
+  viewMap: null,
+  editorMap: null,
+  wpMap: null,
+  obMap: null,           // Leaflet map inside OOB management modal
+  obPolygonLayers: [],   // polygon layers currently on obMap
+};
+
+let wpSaveCallback = null;  // called after saving a waypoint from within the editor
+
+const loggedIn = {{ 'true' if logged_in else 'false' }};
+
+// ── Colour helpers ─────────────────────────────────────────────────────────
+const COLOR_MAP = { R: '#dc3545', G: '#198754', Y: '#e6a817', YB: '#c8a000', '': '#0d6efd' };
+function markColor(color) { return COLOR_MAP[color] || '#0d6efd'; }
+
+function wpById(id) { return S.waypoints.find(w => w.id === id); }
+// A "mark" is one of:
+//   string "7S"                           — legacy listed-waypoint ID (rounding defaults S)
+//   {wp: "7S", rounding: "S"|"P"}         — listed-waypoint ref with explicit rounding
+//   {id: "cm_…", lat, lon, rounding, …}   — custom mark (has lat property)
+function isCustom(mark) { return mark !== null && typeof mark === 'object' && !mark.wp; }
+function resolveMark(mark) {
+  if (typeof mark === 'string') return wpById(mark);
+  if (mark.wp) return wpById(mark.wp);
+  return mark; // custom mark is its own definition
+}
+function markRounding(mark) {
+  if (typeof mark === 'string') return 'S';
+  return mark.rounding || 'S';
+}
+// Normalise legacy strings to explicit rounding objects when loading into the editor
+function normaliseMark(mark) {
+  if (typeof mark === 'string') return { wp: mark, rounding: 'S' };
+  return { ...mark, rounding: mark.rounding || 'S' };
+}
+
+// ── Mark type definitions ──────────────────────────────────────────────────
+const MARK_TYPES = [
+  { id: 'red_can_lg',       label: 'Big red can',         shape: 'can',    fill: '#dc3545', stroke: '#8b0000', size: 36, colorCode: 'R' },
+  { id: 'red_can_sm',       label: 'Small red can',       shape: 'can',    fill: '#dc3545', stroke: '#8b0000', size: 22, colorCode: 'R' },
+  { id: 'green_cone_lg',    label: 'Big green cone',      shape: 'cone',   fill: '#198754', stroke: '#0a3d20', size: 36, colorCode: 'G' },
+  { id: 'green_cone_sm',    label: 'Small green cone',    shape: 'cone',   fill: '#198754', stroke: '#0a3d20', size: 22, colorCode: 'G' },
+  { id: 'yellow_circle_lg', label: 'Big yellow circle',   shape: 'circle', fill: '#e6a817', stroke: '#7d5a00', size: 36, colorCode: 'Y' },
+  { id: 'yellow_circle_sm', label: 'Small yellow circle', shape: 'circle', fill: '#e6a817', stroke: '#7d5a00', size: 22, colorCode: 'Y' },
+];
+
+const _TYPE_DEFAULT = { R: 'red_can_sm', G: 'green_cone_sm', Y: 'yellow_circle_sm', YB: 'yellow_circle_sm' };
+function getMarkType(wp) { return wp.mark_type || _TYPE_DEFAULT[wp.color] || 'yellow_circle_sm'; }
+function markTypeDef(id) { return MARK_TYPES.find(t => t.id === id) || MARK_TYPES[4]; }
+
+function shapeSvg(shape, fill, stroke, sz) {
+  // All shapes defined in a fixed 24×24 viewBox, scaled to sz.
+  // pointer-events:none so SVG elements don't swallow clicks on parent buttons.
+  const attrs = `viewBox="0 0 24 24" width="${sz}" height="${sz}"
+    xmlns="http://www.w3.org/2000/svg" style="pointer-events:none;display:block;overflow:visible"`;
+  if (shape === 'can') {
+    // Cylinder: rectangular body + elliptical top rim
+    return `<svg ${attrs}>
+      <rect x="4" y="9" width="16" height="12" rx="2" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>
+      <ellipse cx="12" cy="9" rx="8" ry="3.5" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>
+      <ellipse cx="12" cy="9" rx="5.5" ry="2" fill="${fill}" stroke="none" opacity="0.4"/>
+    </svg>`;
+  }
+  if (shape === 'cone') {
+    // Triangle (conical buoy viewed from the side)
+    return `<svg ${attrs}>
+      <polygon points="12,2 22,22 2,22" fill="${fill}" stroke="${stroke}"
+               stroke-width="1.5" stroke-linejoin="round"/>
+    </svg>`;
+  }
+  // Spherical buoy
+  return `<svg ${attrs}>
+    <circle cx="12" cy="12" r="9" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>
+  </svg>`;
+}
+
+function makeMarkIcon(typeId, seqNum) {
+  const mt = markTypeDef(typeId);
+  const sz = mt.size, svg = shapeSvg(mt.shape, mt.fill, mt.stroke, sz);
+  const badge = `<div style="position:absolute;top:-7px;left:50%;transform:translateX(-50%);
+    background:rgba(0,0,0,.7);color:#fff;border-radius:3px;padding:0 3px;
+    font-size:9px;font-weight:700;line-height:14px;white-space:nowrap;pointer-events:none">${seqNum}</div>`;
+  return L.divIcon({
+    className: '',
+    html: `<div style="position:relative;width:${sz}px;height:${sz}px">${svg}${badge}</div>`,
+    iconSize: [sz, sz], iconAnchor: [sz/2, sz/2], popupAnchor: [0, -(sz/2 + 10)],
+  });
+}
+
+function makeCBIcon() {
+  const w = 46, h = 28;
+  const svg = `<svg viewBox="0 0 46 28" width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">
+    <path d="M2,23 L6,14 L40,14 L44,23 Q23,30 2,23Z" fill="#fd7e14" stroke="#b84000" stroke-width="1.5"/>
+    <path d="M10,14 L10,7 L34,7 L34,14" fill="#fff" stroke="#ccc" stroke-width="1"/>
+    <circle cx="23" cy="10.5" r="2" fill="#ddd" stroke="#aaa" stroke-width="0.5"/>
+    <line x1="23" y1="1" x2="23" y2="7" stroke="#444" stroke-width="1.5"/>
+    <polygon points="23,1 32,4 23,7" fill="#dc3545" stroke="#8b0000" stroke-width="0.5"/>
+  </svg>`;
+  return L.divIcon({
+    className: '',
+    html: svg,
+    iconSize: [w, h], iconAnchor: [w/2, h/2], popupAnchor: [0, -(h/2 + 4)],
+  });
+}
+
+// Small semi-transparent icon for background (non-course) waypoints
+function makeWpDotIcon(wp) {
+  const mt = markTypeDef(getMarkType(wp));
+  const sz = 15;
+  return L.divIcon({
+    className: '',
+    html: `<div style="opacity:0.38">${shapeSvg(mt.shape, mt.fill, mt.stroke, sz)}</div>`,
+    iconSize: [sz, sz], iconAnchor: [sz/2, sz/2], popupAnchor: [0, -(sz/2 + 3)],
+  });
+}
+
+// Draw a polyline with direction-of-travel arrows; tags decorator for easy removal
+function drawCourseRoute(map, latlngs, color) {
+  if (!latlngs || latlngs.length < 2) return;
+  L.polyline(latlngs, { color, weight: 2.5, dashArray: '7 4', opacity: 0.85 }).addTo(map);
+  if (typeof L.polylineDecorator !== 'undefined') {
+    const dec = L.polylineDecorator(latlngs, {
+      patterns: [{
+        offset: 35, repeat: 85,
+        symbol: L.Symbol.arrowHead({
+          pixelSize: 11, polygon: false,
+          pathOptions: { color, weight: 2.5, opacity: 0.9 },
+        }),
+      }],
+    }).addTo(map);
+    dec._isDecorator = true;
+  }
+}
+
+// Render all OOB polygons as semi-transparent red overlays on any map
+function drawObsPolygons(map) {
+  S.outOfBounds.forEach(ob => {
+    if (ob.coords.length < 3) return;
+    L.polygon(ob.coords, {
+      color: '#dc3545', weight: 2, dashArray: '6 4',
+      fillColor: '#dc3545', fillOpacity: 0.12,
+    }).addTo(map).bindTooltip(ob.name, { sticky: true, opacity: 0.85 });
+  });
+}
+
+function makeIcon(label, color) {   // legacy fallback — not used for map marks
+  const bg = markColor(color);
+  const fg = (color === 'Y' || color === 'YB') ? '#333' : '#fff';
+  return L.divIcon({
+    className: '',
+    html: `<div style="background:${bg};width:26px;height:26px;border-radius:50%;
+           display:flex;align-items:center;justify-content:center;color:${fg};
+           font-weight:700;font-size:11px;border:2px solid rgba(0,0,0,.25);
+           box-shadow:0 1px 4px rgba(0,0,0,.3)">${label}</div>`,
+    iconSize: [26, 26], iconAnchor: [13, 13], popupAnchor: [0, -14],
+  });
+}
+
+// ── OOB path routing ──────────────────────────────────────────────────────
+// All points are [lat, lon] arrays. Flat-earth approximation is fine for
+// the small area (Southampton Water) these courses cover.
+
+function _cross2d(a, b, c) {
+  return (b[0]-a[0])*(c[1]-a[1]) - (b[1]-a[1])*(c[0]-a[0]);
+}
+
+// True only for proper (non-touching) crossing of the two segments.
+function _segsCross(p1, p2, p3, p4) {
+  const d1 = _cross2d(p3, p4, p1), d2 = _cross2d(p3, p4, p2);
+  const d3 = _cross2d(p1, p2, p3), d4 = _cross2d(p1, p2, p4);
+  return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+         ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+}
+
+// Ray-casting point-in-polygon test. [lat,lon] = [x,y] for the formula.
+function _ptInPoly(pt, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length-1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if (((yi > pt[1]) !== (yj > pt[1])) &&
+        (pt[0] < (xj-xi)*(pt[1]-yi)/(yj-yi)+xi))
+      inside = !inside;
+  }
+  return inside;
+}
+
+// A segment is blocked by a polygon when it crosses an edge OR its midpoint
+// lies inside the polygon (catches both endpoints inside, and diagonals).
+function _segBlockedByPoly(p1, p2, poly) {
+  if (poly.length < 3) return false;
+  for (let i = 0, j = poly.length-1; i < poly.length; j = i++)
+    if (_segsCross(p1, p2, poly[i], poly[j])) return true;
+  return _ptInPoly([(p1[0]+p2[0])/2, (p1[1]+p2[1])/2], poly);
+}
+
+function _segIsBlocked(p1, p2) {
+  return S.outOfBounds.some(ob => _segBlockedByPoly(p1, p2, ob.coords));
+}
+
+// Visibility-graph Dijkstra: route a single segment from→to around all OOB
+// polygons. Returns the shortest sequence of [lat,lon] points.
+function routeSegment(from, to) {
+  if (!S.outOfBounds.length || !_segIsBlocked(from, to)) return [from, to];
+
+  const nodes = [from, to, ...S.outOfBounds.flatMap(ob => ob.coords)];
+  const n = nodes.length;
+  const adj = Array.from({length: n}, () => []);
+
+  for (let i = 0; i < n; i++) {
+    for (let j = i+1; j < n; j++) {
+      if (!_segIsBlocked(nodes[i], nodes[j])) {
+        const dl = nodes[i][0]-nodes[j][0], dn = nodes[i][1]-nodes[j][1];
+        const d = Math.sqrt(dl*dl + dn*dn);
+        adj[i].push({to: j, d});
+        adj[j].push({to: i, d});
+      }
+    }
+  }
+
+  const dist = new Array(n).fill(Infinity);
+  const prev = new Array(n).fill(-1);
+  const vis  = new Array(n).fill(false);
+  dist[0] = 0;
+
+  for (let iter = 0; iter < n; iter++) {
+    let u = -1;
+    for (let i = 0; i < n; i++) if (!vis[i] && (u < 0 || dist[i] < dist[u])) u = i;
+    if (u < 0 || dist[u] === Infinity) break;
+    vis[u] = true;
+    for (const e of adj[u]) {
+      if (dist[u] + e.d < dist[e.to]) { dist[e.to] = dist[u]+e.d; prev[e.to] = u; }
+    }
+  }
+
+  if (dist[1] === Infinity) return [from, to];
+  const path = [];
+  for (let cur = 1; cur !== -1; cur = prev[cur]) path.push(nodes[cur]);
+  return path.reverse();
+}
+
+// Route a full ordered waypoint sequence, detouring around each blocked
+// segment independently.
+function buildRoutedPath(latlngs) {
+  if (!S.outOfBounds.length || latlngs.length < 2) return latlngs;
+  const result = [latlngs[0]];
+  for (let i = 1; i < latlngs.length; i++) {
+    const seg = routeSegment(latlngs[i-1], latlngs[i]);
+    result.push(...seg.slice(1));
+  }
+  return result;
+}
+
+// ── Rounding offset positions ─────────────────────────────────────────────
+// Returns the [lat,lon] points the course line passes through — slightly
+// offset from each mark so the line passes to port or starboard as set.
+const ROUNDING_OFFSET = 0.00055; // ~60 m at 50 °N — clearly visible, not excessive
+
+function roundingOffsetPositions(marks) {
+  const pts = [], rounds = [];
+  for (const m of marks) {
+    const wp = resolveMark(m);
+    if (!wp) continue;
+    pts.push([wp.lat, wp.lon]);
+    rounds.push(markRounding(m));
+  }
+  if (pts.length < 2) return pts;
+
+  // Work in a local flat (x = lon·cosLat, y = lat) plane for consistent distances.
+  const cosLat = Math.cos(pts[0][0] * Math.PI / 180);
+  const toFlat  = ([lat, lon]) => [lon * cosLat, lat];
+  const fromFlat = ([x, y])    => [y, x / cosLat];
+  const norm    = ([x, y])    => { const l = Math.sqrt(x*x + y*y); return l ? [x/l, y/l] : [0, 0]; };
+
+  return pts.map((pt, i) => {
+    const q   = toFlat(pt);
+    const prv = i > 0            ? toFlat(pts[i - 1]) : null;
+    const nxt = i < pts.length-1 ? toFlat(pts[i + 1]) : null;
+
+    let dx, dy;
+    if (prv && nxt) {
+      const vin  = norm([q[0]-prv[0], q[1]-prv[1]]);
+      const vout = norm([nxt[0]-q[0], nxt[1]-q[1]]);
+      let avg = norm([vin[0]+vout[0], vin[1]+vout[1]]);
+      if (!avg[0] && !avg[1]) avg = vin; // sharp 180° turn — use incoming
+      [dx, dy] = avg;
+    } else if (nxt) {
+      [dx, dy] = norm([nxt[0]-q[0], nxt[1]-q[1]]);
+    } else {
+      [dx, dy] = norm([q[0]-prv[0], q[1]-prv[1]]);
+    }
+
+    // In (x=east, y=north) space: left-perp = (-dy, dx), right-perp = (dy, -dx)
+    // Starboard rounding → mark stays on starboard (right) → line passes to PORT (left)
+    // Port rounding      → mark stays on port (left)       → line passes to STARBOARD (right)
+    const [px, py] = rounds[i] === 'S' ? [-dy, dx] : [dy, -dx];
+    return fromFlat([q[0] + ROUNDING_OFFSET * px, q[1] + ROUNDING_OFFSET * py]);
+  });
+}
+
+// ── Data load ──────────────────────────────────────────────────────────────
+async function loadData() {
+  const resp = await fetch('/api/data');
+  const data = await resp.json();
+  S.waypoints    = data.waypoints;
+  S.seriesTypes  = data.series_types;
+  S.courses      = data.courses;
+  S.outOfBounds  = data.out_of_bounds || [];
+  renderSidebar();
+  if (S.selectedStId) renderCourses(S.selectedStId);
+}
+
+// ── Sidebar ────────────────────────────────────────────────────────────────
+function renderSidebar() {
+  const list = document.getElementById('seriesList');
+  if (!S.seriesTypes.length) {
+    list.innerHTML = '<div class="list-group-item text-muted small">No series types yet.</div>';
+    return;
+  }
+  list.innerHTML = S.seriesTypes.map(st => {
+    const count = S.courses.filter(c => c.series_type_id === st.id).length;
+    const active = st.id === S.selectedStId ? 'active' : '';
+    return `<div class="list-group-item list-group-item-action sidebar-item ${active} d-flex justify-content-between align-items-center py-2"
+                 onclick="selectSeriesType('${st.id}')">
+              <span>${esc(st.name)}</span>
+              <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-secondary rounded-pill">${count}</span>
+                ${loggedIn ? `<button class="btn btn-link btn-sm p-0 text-secondary" onclick="event.stopPropagation();openSeriesTypeModal('${st.id}')">✎</button>` : ''}
+              </div>
+            </div>`;
+  }).join('');
+}
+
+function selectSeriesType(stId) {
+  S.selectedStId = stId;
+  renderSidebar();
+  renderCourses(stId);
+}
+
+// ── Courses panel ──────────────────────────────────────────────────────────
+function renderCourses(stId) {
+  const st = S.seriesTypes.find(s => s.id === stId);
+  if (!st) return;
+  document.getElementById('coursesTitle').textContent = st.name;
+  const btn = document.getElementById('addCourseBtn');
+  if (btn) btn.classList.remove('d-none');
+
+  const courses = S.courses.filter(c => c.series_type_id === stId);
+  const body = document.getElementById('coursesBody');
+
+  if (!courses.length) {
+    body.innerHTML = '<p class="text-muted mb-0">No courses yet. Add one above.</p>';
+    return;
+  }
+
+  body.innerHTML = `<div class="row g-3">${courses.map(c => courseCard(c)).join('')}</div>`;
+}
+
+function courseCard(c) {
+  const marks = c.marks || [];
+  const markNames = marks.map((mark, i) => {
+    const wp  = resolveMark(mark);
+    const col = wp?.color || '';
+    const name = wp
+      ? (isCustom(mark) ? (wp.name || 'Custom') : `${wp.code} ${wp.name}`)
+      : (mark?.wp || mark?.id || String(mark));
+    const rnd = markRounding(mark);
+    return `<span class="mark-badge" style="background:${markColor(col)};color:${(col==='Y'||col==='YB')?'#333':'#fff'};font-size:10px">${i+1}</span>${esc(name)}<span class="ms-1 text-muted" style="font-size:9px">${rnd}</span>`;
+  }).map(h => `<li class="small py-1">${h}</li>`).join('');
+
+  return `<div class="col-md-6 col-xl-4">
+    <div class="card course-card h-100" onclick="openViewModal('${c.id}')">
+      <div class="card-body">
+        <h6 class="card-title fw-semibold mb-1">${esc(c.name)}</h6>
+        <p class="text-muted small mb-2">${marks.length} mark${marks.length !== 1 ? 's' : ''}</p>
+        <ul class="list-unstyled mb-0">${markNames}</ul>
+      </div>
+      <div class="card-footer bg-transparent py-2 d-flex justify-content-end gap-2">
+        <button class="btn btn-outline-secondary btn-sm" onclick="event.stopPropagation();openViewModal('${c.id}')">View map</button>
+        ${loggedIn ? `<button class="btn btn-outline-primary btn-sm" onclick="event.stopPropagation();openCourseEditor('${c.id}')">Edit</button>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── View modal ─────────────────────────────────────────────────────────────
+function openViewModal(courseId) {
+  const course = S.courses.find(c => c.id === courseId);
+  if (!course) return;
+  S.viewingCourseId = courseId;
+  document.getElementById('viewModalTitle').textContent = course.name;
+
+  const editBtn = document.getElementById('viewEditBtn');
+  if (editBtn) {
+    editBtn.onclick = () => {
+      bootstrap.Modal.getInstance(document.getElementById('viewModal')).hide();
+      openCourseEditor(courseId);
+    };
+  }
+
+  // Build mark list
+  const marks = course.marks || [];
+  const markHtml = marks.length
+    ? marks.map((mark, i) => {
+        const wp = resolveMark(mark);
+        if (!wp) return '';
+        const custom = isCustom(mark);
+        const bg = markColor(wp.color || '');
+        const fg = (wp.color === 'Y' || wp.color === 'YB') ? '#333' : '#fff';
+        const label = custom
+          ? `<span class="fw-semibold">${esc(mark.name || 'Custom mark')}</span>`
+          : `<span class="fw-semibold me-1">${esc(wp.code)}</span><span>${esc(wp.name)}</span>`;
+        const badge = (!custom && wp.color)
+          ? `<span class="ms-2 badge" style="background:${bg};color:${fg}">${esc(wp.color)}</span>` : '';
+        return `<div class="mark-row">
+          <span class="mark-badge" style="background:${bg};color:${fg}">${i + 1}</span>
+          ${label}${badge}
+        </div>`;
+      }).join('')
+    : '<p class="text-muted">No marks defined.</p>';
+  let listHtml = markHtml;
+  if (course.committee_boat) {
+    listHtml += `<div class="mark-row mt-2 pt-2" style="border-top:2px solid #fd7e14">
+      <span class="mark-badge" style="background:#fd7e14;color:#fff;border-radius:4px">CB</span>
+      <span class="fw-semibold">Committee Boat</span>
+      <span class="ms-2 text-muted small">${course.committee_boat.lat.toFixed(4)}, ${course.committee_boat.lon.toFixed(4)}</span>
+    </div>`;
+  }
+  document.getElementById('viewMarkList').innerHTML = listHtml;
+
+  const modal = new bootstrap.Modal(document.getElementById('viewModal'));
+  modal.show();
+
+  document.getElementById('viewModal').addEventListener('shown.bs.modal', () => {
+    initViewMap(marks, course.committee_boat || null);
+  }, { once: true });
+}
+
+function initViewMap(markIds, committeeBoat) {
+  if (S.viewMap) { S.viewMap.remove(); S.viewMap = null; }
+  const map = L.map('viewMap');
+  S.viewMap = map;
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors', maxZoom: 18,
+  }).addTo(map);
+
+  // Background layer: all listed waypoints (small, dim)
+  S.waypoints.forEach(wp => {
+    L.marker([wp.lat, wp.lon], { icon: makeWpDotIcon(wp) })
+      .addTo(map)
+      .bindTooltip(`${wp.code} — ${wp.name}`, { direction: 'top', opacity: 0.85 });
+  });
+
+  // Course marks — icons at actual position, course line offset to port/starboard
+  const markLatlngs = [];
+  markIds.forEach((mark, i) => {
+    const wp = resolveMark(mark);
+    if (!wp) return;
+    const ll = [wp.lat, wp.lon];
+    markLatlngs.push(ll);
+    const rounding = markRounding(mark);
+    const roundLabel = rounding === 'S' ? 'Leave to starboard' : 'Leave to port';
+    const label = isCustom(mark)
+      ? `<strong>${esc(mark.name || 'Custom mark')}</strong><br>Mark ${i + 1} &middot; ${roundLabel}`
+      : `<strong>${wp.code} — ${wp.name}</strong><br>Mark ${i + 1} &middot; ${roundLabel}`;
+    L.marker(ll, { icon: makeMarkIcon(getMarkType(wp), i + 1) }).addTo(map).bindPopup(label);
+  });
+
+  // OOB overlays, then course line offset by rounding and routed around OOB areas
+  drawObsPolygons(map);
+  drawCourseRoute(map, buildRoutedPath(roundingOffsetPositions(markIds)), '#0d6efd');
+
+  // Committee boat — not on the course line
+  if (committeeBoat) {
+    L.marker([committeeBoat.lat, committeeBoat.lon], { icon: makeCBIcon() })
+      .addTo(map)
+      .bindPopup('<strong>Committee Boat</strong>');
+    markLatlngs.push([committeeBoat.lat, committeeBoat.lon]);
+  }
+
+  const allPts = [...S.waypoints.map(w => [w.lat, w.lon]), ...markLatlngs];
+  if (allPts.length) map.fitBounds(L.latLngBounds(allPts).pad(0.05));
+  else map.setView([50.87, -1.37], 12);
+  map.invalidateSize();
+}
+
+// ── Course editor ──────────────────────────────────────────────────────────
+function openCourseEditor(courseId) {
+  S.editingCourseId = courseId;
+  const course = courseId ? S.courses.find(c => c.id === courseId) : null;
+
+  document.getElementById('editorModalTitle').textContent = course ? 'Edit course' : 'New course';
+  document.getElementById('editorName').value = course ? course.name : '';
+
+  // Series type dropdown
+  const stSel = document.getElementById('editorSeriesType');
+  stSel.innerHTML = S.seriesTypes.map(st =>
+    `<option value="${st.id}" ${(course?.series_type_id === st.id || (!course && st.id === S.selectedStId)) ? 'selected' : ''}>${esc(st.name)}</option>`
+  ).join('');
+
+  // Waypoint select
+  const wpSel = document.getElementById('editorWpSelect');
+  const sorted = [...S.waypoints].sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+  wpSel.innerHTML = sorted.map(w =>
+    `<option value="${w.id}">${esc(w.code)} — ${esc(w.name)}</option>`
+  ).join('');
+
+  // Marks + committee boat — normalise legacy string marks to {wp, rounding} objects
+  S.editorMarks = (course?.marks || []).map(normaliseMark);
+  S.committeeBoat = course?.committee_boat || null;
+  S.placingCB = false;
+  renderEditorMarkList();
+  renderCBStatus();
+
+  const deleteBtn = document.getElementById('editorDeleteBtn');
+  if (deleteBtn) {
+    if (courseId) deleteBtn.classList.remove('d-none');
+    else deleteBtn.classList.add('d-none');
+  }
+
+  const modal = new bootstrap.Modal(document.getElementById('editorModal'));
+  modal.show();
+
+  document.getElementById('editorModal').addEventListener('shown.bs.modal', () => {
+    initEditorMap();
+  }, { once: true });
+}
+
+function renderEditorMarkList() {
+  const container = document.getElementById('editorMarkList');
+  const noMarks = document.getElementById('editorNoMarks');
+
+  if (!S.editorMarks.length) {
+    container.innerHTML = '<p class="text-muted small mb-0" id="editorNoMarks">No marks yet.</p>';
+    return;
+  }
+
+  container.innerHTML = S.editorMarks.map((mark, i) => {
+    const custom   = isCustom(mark);
+    const wp       = resolveMark(mark);
+    const rounding = markRounding(mark);
+    const typeKey  = wp ? getMarkType(wp) : 'yellow_circle_sm';
+    const mtDef    = markTypeDef(typeKey);
+    const typeLabel = mtDef ? mtDef.label : '—';
+    const bg = wp ? markColor(wp.color || '') : '#6c757d';
+    const fg = (wp?.color === 'Y' || wp?.color === 'YB') ? '#333' : '#fff';
+    const nameHtml = custom
+      ? `<input type="text" class="form-control form-control-sm py-0 px-1 border-0"
+           value="${esc(mark.name || 'Custom mark')}" style="max-width:120px;font-size:11px"
+           onchange="renameCustomMark(${i},this.value)" title="Click to rename">`
+      : `<span>${esc(wp ? `${wp.code} — ${wp.name}` : String(mark))}</span>`;
+    const dragHint = custom
+      ? `<div class="text-muted" style="font-size:9px">drag on map to move</div>` : '';
+    const roundingTitle = rounding === 'S'
+      ? 'Starboard rounding — mark stays on your right (click to switch to port)'
+      : 'Port rounding — mark stays on your left (click to switch to starboard)';
+    return `<div class="mark-row" data-idx="${i}">
+      <span class="mark-badge" style="background:${bg};color:${fg}">${i + 1}</span>
+      <div class="flex-grow-1 small overflow-hidden">
+        ${nameHtml}
+        <div class="text-muted" style="font-size:10px">${esc(typeLabel)}${dragHint}</div>
+      </div>
+      <div class="d-flex gap-1 ms-1 flex-shrink-0">
+        ${custom ? `<button class="btn btn-outline-primary btn-sm py-0 px-1" title="Change appearance"
+                onclick="openMarkTypePicker(null,${i})">🎨</button>` : ''}
+        <button class="btn ${rounding === 'S' ? 'btn-outline-info' : 'btn-outline-warning'} btn-sm py-0 px-1"
+                onclick="toggleRounding(${i})" title="${roundingTitle}"
+                style="font-size:10px;min-width:28px">${rounding === 'S' ? 'Stbd' : 'Port'}</button>
+        <button class="btn btn-outline-secondary btn-sm py-0 px-1"
+                onclick="editorMoveUp(${i})" ${i === 0 ? 'disabled' : ''}>↑</button>
+        <button class="btn btn-outline-secondary btn-sm py-0 px-1"
+                onclick="editorMoveDown(${i})" ${i === S.editorMarks.length - 1 ? 'disabled' : ''}>↓</button>
+        <button class="btn btn-outline-danger btn-sm py-0 px-1"
+                onclick="editorRemoveMark(${i})">×</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function editorAddMark() {
+  const wid = document.getElementById('editorWpSelect').value;
+  if (!wid) return;
+  S.editorMarks.push({ wp: wid, rounding: 'S' });
+  renderEditorMarkList();
+  updateEditorMap();
+}
+
+function editorMoveUp(i) {
+  if (i === 0) return;
+  [S.editorMarks[i - 1], S.editorMarks[i]] = [S.editorMarks[i], S.editorMarks[i - 1]];
+  renderEditorMarkList();
+  updateEditorMap();
+}
+
+function editorMoveDown(i) {
+  if (i >= S.editorMarks.length - 1) return;
+  [S.editorMarks[i], S.editorMarks[i + 1]] = [S.editorMarks[i + 1], S.editorMarks[i]];
+  renderEditorMarkList();
+  updateEditorMap();
+}
+
+function editorRemoveMark(i) {
+  S.editorMarks.splice(i, 1);
+  renderEditorMarkList();
+  updateEditorMap();
+}
+
+function toggleRounding(i) {
+  const mark = S.editorMarks[i];
+  const next = markRounding(mark) === 'S' ? 'P' : 'S';
+  S.editorMarks[i] = { ...normaliseMark(mark), rounding: next };
+  renderEditorMarkList();
+  updateEditorMap();
+}
+
+function initEditorMap() {
+  if (S.editorMap) { S.editorMap.remove(); S.editorMap = null; }
+  const map = L.map('editorMap');
+  S.editorMap = map;
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors', maxZoom: 18,
+  }).addTo(map);
+  map.setView([50.87, -1.37], 12);
+  map.invalidateSize();
+  updateEditorMap();
+}
+
+function updateEditorMap() {
+  if (!S.editorMap) return;
+  // Clear markers, polylines, polygons, and any arrow decorators
+  S.editorMap.eachLayer(l => {
+    if (l instanceof L.Marker || l instanceof L.Polyline || l._isDecorator) {
+      S.editorMap.removeLayer(l);
+    }
+  });
+
+  // Out-of-bounds overlays (redrawn after the clear; polygons are Polyline subclasses)
+  drawObsPolygons(S.editorMap);
+
+  // Background: all listed waypoints (small, dim)
+  S.waypoints.forEach(wp => {
+    L.marker([wp.lat, wp.lon], { icon: makeWpDotIcon(wp) })
+      .addTo(S.editorMap)
+      .bindTooltip(`${wp.code} — ${wp.name}`, { direction: 'top', opacity: 0.85 });
+  });
+
+  // Course marks — icons at actual position, course line offset to port/starboard
+  const markLatlngs = [];
+  S.editorMarks.forEach((mark, i) => {
+    const custom = isCustom(mark);
+    const wp = resolveMark(mark);
+    if (!wp) return;
+    const ll = [wp.lat, wp.lon];
+    markLatlngs.push(ll);
+    const popup = custom
+      ? `<strong>${esc(mark.name || 'Custom mark')}</strong><br><small>Drag to reposition</small>`
+      : `<strong>${wp.code} — ${wp.name}</strong><br><small class="text-muted">Position managed in Waypoints</small>`;
+    const marker = L.marker(ll, { icon: makeMarkIcon(getMarkType(wp), i + 1), draggable: custom })
+      .addTo(S.editorMap)
+      .bindPopup(popup);
+    if (custom) {
+      marker.on('dragend', function(e) {
+        const { lat, lng } = e.target.getLatLng();
+        const idx = S.editorMarks.findIndex(m => isCustom(m) && m.id === mark.id);
+        if (idx >= 0) S.editorMarks[idx] = { ...S.editorMarks[idx], lat, lon: lng };
+      });
+    }
+  });
+
+  // Course route offset by rounding then detoured around OOB areas
+  drawCourseRoute(S.editorMap, buildRoutedPath(roundingOffsetPositions(S.editorMarks)), '#0d6efd');
+  if (markLatlngs.length > 1) S.editorMap.fitBounds(L.latLngBounds(markLatlngs).pad(0.15));
+  else if (markLatlngs.length === 1) S.editorMap.setView(markLatlngs[0], 13);
+
+  // Committee boat — not part of the course line
+  if (S.committeeBoat) {
+    const cbMarker = L.marker([S.committeeBoat.lat, S.committeeBoat.lon], { icon: makeCBIcon(), draggable: true })
+      .addTo(S.editorMap)
+      .bindPopup('<strong>Committee Boat</strong><br><small>Drag to reposition</small>');
+    cbMarker.on('dragend', function(e) {
+      const { lat, lng } = e.target.getLatLng();
+      S.committeeBoat = { lat, lon: lng };
+      renderCBStatus();
+    });
+    if (!markLatlngs.length) S.editorMap.setView([S.committeeBoat.lat, S.committeeBoat.lon], 13);
+  }
+
+  S.editorMap.invalidateSize();
+}
+
+async function saveEditorCourse() {
+  const name = document.getElementById('editorName').value.trim();
+  const stId = document.getElementById('editorSeriesType').value;
+  if (!name) { alert('Please enter a course name.'); return; }
+  if (!stId)  { alert('Please select a series type.'); return; }
+
+  const payload = { name, series_type_id: stId, marks: S.editorMarks, committee_boat: S.committeeBoat };
+  const url     = S.editingCourseId ? `/api/courses/${S.editingCourseId}` : '/api/courses';
+  const method  = S.editingCourseId ? 'PUT' : 'POST';
+
+  const resp = await fetch(url, {
+    method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  });
+  if (!resp.ok) { alert('Save failed.'); return; }
+
+  bootstrap.Modal.getInstance(document.getElementById('editorModal')).hide();
+  await loadData();
+  if (S.selectedStId) renderCourses(S.selectedStId);
+}
+
+async function deleteCourseFromEditor() {
+  if (!S.editingCourseId) return;
+  if (!confirm('Delete this course?')) return;
+  await fetch(`/api/courses/${S.editingCourseId}`, { method: 'DELETE' });
+  bootstrap.Modal.getInstance(document.getElementById('editorModal')).hide();
+  await loadData();
+  if (S.selectedStId) renderCourses(S.selectedStId);
+}
+
+// ── Series type modal ──────────────────────────────────────────────────────
+function openSeriesTypeModal(stId) {
+  const st = stId ? S.seriesTypes.find(s => s.id === stId) : null;
+  document.getElementById('stModalTitle').textContent = st ? 'Edit series type' : 'New series type';
+  document.getElementById('stModalId').value   = st ? st.id : '';
+  document.getElementById('stModalName').value = st ? st.name : '';
+  const delBtn = document.getElementById('stDeleteBtn');
+  if (delBtn) {
+    if (st) delBtn.classList.remove('d-none');
+    else delBtn.classList.add('d-none');
+  }
+  new bootstrap.Modal(document.getElementById('seriesTypeModal')).show();
+}
+
+async function saveSeriesType() {
+  const id   = document.getElementById('stModalId').value;
+  const name = document.getElementById('stModalName').value.trim();
+  if (!name) { alert('Please enter a name.'); return; }
+
+  const url    = id ? `/api/series_types/${id}` : '/api/series_types';
+  const method = id ? 'PUT' : 'POST';
+  await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+
+  bootstrap.Modal.getInstance(document.getElementById('seriesTypeModal')).hide();
+  await loadData();
+}
+
+async function deleteSeriesType() {
+  const id = document.getElementById('stModalId').value;
+  if (!id) return;
+  const st = S.seriesTypes.find(s => s.id === id);
+  const courseCount = S.courses.filter(c => c.series_type_id === id).length;
+  const msg = courseCount
+    ? `Delete "${st?.name}" and its ${courseCount} course(s)?`
+    : `Delete "${st?.name}"?`;
+  if (!confirm(msg)) return;
+  await fetch(`/api/series_types/${id}`, { method: 'DELETE' });
+  if (S.selectedStId === id) S.selectedStId = null;
+  bootstrap.Modal.getInstance(document.getElementById('seriesTypeModal')).hide();
+  await loadData();
+  document.getElementById('coursesTitle').textContent = 'Select a series type';
+  document.getElementById('coursesBody').innerHTML = '<p class="text-muted">Select a series type from the left panel.</p>';
+  const btn = document.getElementById('addCourseBtn');
+  if (btn) btn.classList.add('d-none');
+}
+
+// ── Waypoints modal ────────────────────────────────────────────────────────
+function openWaypointsModal() {
+  renderWpTable();
+  const el = document.getElementById('waypointsModal');
+  el.addEventListener('shown.bs.modal',  () => initWpMap(),  { once: true });
+  el.addEventListener('hidden.bs.modal', () => { if (S.wpMap) { S.wpMap.remove(); S.wpMap = null; } }, { once: true });
+  new bootstrap.Modal(el).show();
+}
+
+function initWpMap() {
+  if (S.wpMap) { S.wpMap.remove(); S.wpMap = null; }
+  const map = L.map('wpMap');
+  S.wpMap = map;
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors', maxZoom: 18,
+  }).addTo(map);
+
+  const latlngs = [];
+  S.waypoints.forEach(w => {
+    const ll = [w.lat, w.lon];
+    latlngs.push(ll);
+    const marker = L.marker(ll, { icon: makeMarkIcon(getMarkType(w), w.code), draggable: loggedIn })
+      .addTo(map)
+      .bindTooltip(w.name, { permanent: false, direction: 'top' });
+
+    if (loggedIn) {
+      // Stash original position so we can revert if user cancels
+      let origLatLng = L.latLng(w.lat, w.lon);
+      marker.on('dragstart', function() {
+        origLatLng = this.getLatLng();
+      });
+      marker.on('dragend', async function(e) {
+        const newLL = e.target.getLatLng();
+        const affected = S.courses.filter(c => (c.marks || []).some(m => m === w.id)).length;
+        const msg = `Move "${w.name}" here?\n\n`
+          + `  New: ${newLL.lat.toFixed(5)}°N  ${Math.abs(newLL.lng).toFixed(5)}°W\n`
+          + `  Was: ${origLatLng.lat.toFixed(5)}°N  ${Math.abs(origLatLng.lng).toFixed(5)}°W\n`
+          + (affected ? `\nAffects ${affected} course(s).` : '');
+        if (!confirm(msg)) {
+          e.target.setLatLng(origLatLng);
+          return;
+        }
+        const updated = { ...w, lat: newLL.lat, lon: newLL.lng };
+        await fetch(`/api/waypoints/${w.id}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updated),
+        });
+        await loadData();
+        renderWpTable();
+        origLatLng = newLL;  // update so a second drag uses the new position as baseline
+        // Refresh the marker's popup/tooltip name in case name changed
+        marker.setTooltipContent(w.name);
+      });
+    }
+  });
+
+  // Show OOB overlays for context
+  drawObsPolygons(map);
+
+  if (latlngs.length) map.fitBounds(L.latLngBounds(latlngs).pad(0.05));
+  else map.setView([50.87, -1.37], 12);
+  map.invalidateSize();
+}
+
+function renderWpTable() {
+  const sorted = [...S.waypoints].sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+  const body = document.getElementById('wpTableBody');
+  body.innerHTML = sorted.map(w => {
+    const mt = markTypeDef(getMarkType(w));
+    const typeCell = `${shapeSvg(mt.shape, mt.fill, mt.stroke, 20)}<small class="ms-1">${mt.label}</small>`;
+    const editBtns = loggedIn
+      ? `<button class="btn btn-outline-primary btn-sm py-0 px-1 me-1" title="Change appearance" onclick="openMarkTypePicker('${w.id}')">🎨</button>
+         <button class="btn btn-outline-secondary btn-sm py-0 px-1" onclick="openWpEditor('${w.id}')">✎</button>`
+      : '';
+    return `<tr>
+      <td><code>${esc(w.code)}</code></td>
+      <td>${esc(w.name)}</td>
+      <td style="white-space:nowrap">${typeCell}</td>
+      <td>${w.lat.toFixed(4)}</td>
+      <td>${w.lon.toFixed(4)}</td>
+      ${loggedIn ? `<td style="white-space:nowrap">${editBtns}</td>` : ''}
+    </tr>`;
+  }).join('');
+}
+
+function openWpEditor(wpId) {
+  const wp = wpId ? wpById(wpId) : null;
+  document.getElementById('wpEditorTitle').textContent = wp ? 'Edit waypoint' : 'New waypoint';
+  document.getElementById('wpEditorId').value    = wp ? wp.id : '';
+  document.getElementById('wpEditorCode').value  = wp ? wp.code : '';
+  document.getElementById('wpEditorName').value  = wp ? wp.name : '';
+  document.getElementById('wpEditorColor').value = wp ? (wp.color || '') : '';
+  document.getElementById('wpEditorLat').value   = wp ? wp.lat : '';
+  document.getElementById('wpEditorLon').value   = wp ? wp.lon : '';
+  const delBtn = document.getElementById('wpDeleteBtn');
+  if (delBtn) {
+    if (wp) delBtn.classList.remove('d-none');
+    else delBtn.classList.add('d-none');
+  }
+  new bootstrap.Modal(document.getElementById('wpEditorModal')).show();
+}
+
+// ── Committee boat ─────────────────────────────────────────────────────────
+function startPlacingCB() {
+  if (!S.editorMap) return;
+  S.placingCB = true;
+  document.getElementById('editorMap').style.cursor = 'crosshair';
+  document.getElementById('cbPlaceBtn').textContent = 'Click map to place…';
+  S.editorMap.once('click', function(e) {
+    S.committeeBoat = { lat: e.latlng.lat, lon: e.latlng.lng };
+    S.placingCB = false;
+    document.getElementById('editorMap').style.cursor = '';
+    renderCBStatus();
+    updateEditorMap();
+  });
+}
+
+function removeCB() {
+  S.committeeBoat = null;
+  S.placingCB = false;
+  document.getElementById('editorMap').style.cursor = '';
+  renderCBStatus();
+  updateEditorMap();
+}
+
+function renderCBStatus() {
+  const placeBtn  = document.getElementById('cbPlaceBtn');
+  const removeBtn = document.getElementById('cbRemoveBtn');
+  if (!placeBtn) return;
+  if (S.committeeBoat) {
+    placeBtn.textContent = '⚓ Move CB';
+    removeBtn.classList.remove('d-none');
+  } else {
+    placeBtn.textContent = '⚓ Place committee boat';
+    removeBtn.classList.add('d-none');
+  }
+}
+
+// ── Mark type picker ───────────────────────────────────────────────────────
+// wid = waypoint ID string for listed marks; customIdx = editorMarks index for custom marks
+let _pickWpId = null, _pickCustomIdx = null;
+
+function openMarkTypePicker(wid, customIdx) {
+  _pickWpId = wid; _pickCustomIdx = customIdx;
+  const wp = (customIdx !== null && customIdx !== undefined)
+    ? S.editorMarks[customIdx]
+    : wpById(wid);
+  const currentType = wp ? getMarkType(wp) : 'yellow_circle_sm';
+  document.getElementById('markTypeModalWpName').textContent = wp
+    ? (wp.code ? `${wp.code} — ${wp.name}` : (wp.name || 'Custom mark')) : '';
+  const grid = document.getElementById('markTypeGrid');
+  grid.innerHTML = MARK_TYPES.map(mt => {
+    const selected = mt.id === currentType;
+    const svg = shapeSvg(mt.shape, mt.fill, mt.stroke, 38);
+    return `<button class="btn ${selected ? 'btn-primary' : 'btn-outline-secondary'}
+              d-flex flex-column align-items-center gap-1 p-2"
+              style="font-size:11px;line-height:1.2" onclick="applyMarkType('${mt.id}')">
+      ${svg}<span>${mt.label}</span>
+    </button>`;
+  }).join('');
+  new bootstrap.Modal(document.getElementById('markTypeModal')).show();
+}
+
+async function applyMarkType(typeId) {
+  const mt = markTypeDef(typeId);
+  bootstrap.Modal.getInstance(document.getElementById('markTypeModal')).hide();
+  if (_pickCustomIdx !== null && _pickCustomIdx !== undefined) {
+    // Custom mark — update in-place in editorMarks (no API call)
+    S.editorMarks[_pickCustomIdx] = { ...S.editorMarks[_pickCustomIdx], mark_type: typeId, color: mt.colorCode };
+    renderEditorMarkList();
+    updateEditorMap();
+  } else {
+    // Listed waypoint — persist via API
+    const wp = wpById(_pickWpId);
+    if (!wp) return;
+    await fetch(`/api/waypoints/${_pickWpId}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...wp, mark_type: typeId, color: mt.colorCode }),
+    });
+    await loadData();
+    renderWpTable();
+    if (S.editorMap) { renderEditorMarkList(); updateEditorMap(); }
+  }
+}
+
+// ── Custom marks ───────────────────────────────────────────────────────────
+function addCustomMark() {
+  const center = S.editorMap ? S.editorMap.getCenter() : { lat: 50.87, lng: -1.37 };
+  S.editorMarks.push({
+    id: `cm_${Date.now()}`,
+    name: 'Custom mark',
+    lat: center.lat,
+    lon: center.lng,
+    mark_type: 'yellow_circle_sm',
+    color: 'Y',
+    custom: true,
+    rounding: 'S',
+  });
+  renderEditorMarkList();
+  updateEditorMap();
+}
+
+function renameCustomMark(i, name) {
+  if (isCustom(S.editorMarks[i])) {
+    S.editorMarks[i] = { ...S.editorMarks[i], name: name.trim() || 'Custom mark' };
+  }
+}
+
+
+async function saveWaypoint() {
+  const id  = document.getElementById('wpEditorId').value;
+  const lat = parseFloat(document.getElementById('wpEditorLat').value);
+  const lon = parseFloat(document.getElementById('wpEditorLon').value);
+  const payload = {
+    code:  document.getElementById('wpEditorCode').value.trim(),
+    name:  document.getElementById('wpEditorName').value.trim(),
+    color: document.getElementById('wpEditorColor').value,
+    lat, lon,
+  };
+  if (!payload.name || isNaN(lat) || isNaN(lon)) { alert('Name, latitude and longitude are required.'); return; }
+
+  if (id) {
+    const existing = wpById(id);
+    if (existing && (Math.abs(existing.lat - lat) > 0.00005 || Math.abs(existing.lon - lon) > 0.00005)) {
+      const affected = S.courses.filter(c => (c.marks || []).some(m => m === id)).length;
+      const msg = `Move "${existing.name}" to new coordinates?\n\nThis will update the position in all ${affected} course(s) that use this mark.`;
+      if (!confirm(msg)) return;
+    }
+  }
+
+  const url    = id ? `/api/waypoints/${id}` : '/api/waypoints';
+  const method = id ? 'PUT' : 'POST';
+  await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+
+  bootstrap.Modal.getInstance(document.getElementById('wpEditorModal')).hide();
+  await loadData();
+  renderWpTable();
+  if (S.wpMap) initWpMap();  // refresh map if waypoints modal is open
+  if (wpSaveCallback) { wpSaveCallback(); wpSaveCallback = null; }
+}
+
+async function deleteWaypoint() {
+  const id = document.getElementById('wpEditorId').value;
+  if (!id || !confirm('Delete this waypoint?')) return;
+  await fetch(`/api/waypoints/${id}`, { method: 'DELETE' });
+  bootstrap.Modal.getInstance(document.getElementById('wpEditorModal')).hide();
+  await loadData();
+  renderWpTable();
+}
+
+// ── Out-of-bounds management ──────────────────────────────────────────────
+
+function openObsModal() {
+  renderObsTable();
+  const el = document.getElementById('obsModal');
+  el.addEventListener('shown.bs.modal',  () => initObMap(),  { once: true });
+  el.addEventListener('hidden.bs.modal', () => {
+    _cancelObDraw();
+    if (S.obMap) { S.obMap.remove(); S.obMap = null; }
+    S.obPolygonLayers = [];
+  }, { once: true });
+  new bootstrap.Modal(el).show();
+}
+
+function initObMap() {
+  if (S.obMap) { S.obMap.remove(); S.obMap = null; }
+  const map = L.map('obMap');
+  S.obMap = map;
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors', maxZoom: 18,
+  }).addTo(map);
+
+  S.waypoints.forEach(wp => {
+    L.marker([wp.lat, wp.lon], { icon: makeWpDotIcon(wp) })
+      .addTo(map)
+      .bindTooltip(`${wp.code} — ${wp.name}`, { direction: 'top', opacity: 0.85 });
+  });
+
+  _renderObsOnMap();
+
+  const pts = S.waypoints.map(w => [w.lat, w.lon]);
+  if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.05));
+  else map.setView([50.87, -1.37], 12);
+  map.invalidateSize();
+}
+
+// Redraw OOB polygons on the management map with click-to-highlight styling
+function _renderObsOnMap() {
+  if (!S.obMap) return;
+  S.obPolygonLayers.forEach(l => S.obMap.removeLayer(l));
+  S.obPolygonLayers = [];
+  S.outOfBounds.forEach(ob => {
+    if (ob.coords.length < 3) return;
+    const poly = L.polygon(ob.coords, {
+      color: '#dc3545', weight: 2,
+      fillColor: '#dc3545', fillOpacity: 0.18,
+    }).addTo(S.obMap);
+    poly.bindTooltip(ob.name, { sticky: false, opacity: 0.9 });
+    S.obPolygonLayers.push(poly);
+  });
+}
+
+function renderObsTable() {
+  const body = document.getElementById('obTableBody');
+  if (!body) return;
+  if (!S.outOfBounds.length) {
+    body.innerHTML = `<tr><td colspan="3" class="text-muted text-center small ps-3 py-2">No areas defined yet.</td></tr>`;
+    return;
+  }
+  body.innerHTML = S.outOfBounds.map(ob => {
+    const delBtn = loggedIn
+      ? `<button class="btn btn-outline-danger btn-sm py-0 px-1" onclick="deleteObs('${ob.id}')">Delete</button>`
+      : '';
+    return `<tr>
+      <td class="ps-3">${esc(ob.name)}</td>
+      <td class="text-muted small">${ob.coords.length} vertices</td>
+      ${loggedIn ? `<td>${delBtn}</td>` : ''}
+    </tr>`;
+  }).join('');
+}
+
+async function deleteObs(id) {
+  if (!confirm('Delete this out-of-bounds area?')) return;
+  await fetch(`/api/out_of_bounds/${id}`, { method: 'DELETE' });
+  S.outOfBounds = S.outOfBounds.filter(o => o.id !== id);
+  _renderObsOnMap();
+  renderObsTable();
+}
+
+// ── OOB polygon drawing ────────────────────────────────────────────────────
+
+let _obVerts = [];
+let _obPreviewPoly = null;
+let _obPreviewLine = null;
+let _obFirstMarker = null;
+
+function startDrawingOb() {
+  if (!S.obMap) return;
+  _obVerts = [];
+  _obUpdatePreview(null);
+  document.getElementById('obDrawBtn').classList.add('d-none');
+  document.getElementById('obCancelDrawBtn').classList.remove('d-none');
+  document.getElementById('obFinishDrawBtn').classList.add('d-none');
+  document.getElementById('obDrawHint').textContent = 'Click on the map to add the first vertex.';
+  S.obMap.getContainer().style.cursor = 'crosshair';
+  S.obMap.on('click',     _obClick);
+  S.obMap.on('mousemove', _obMouseMove);
+}
+
+function cancelDrawingOb() { _cancelObDraw(); }
+
+function _cancelObDraw() {
+  if (!S.obMap) return;
+  S.obMap.off('click',     _obClick);
+  S.obMap.off('mousemove', _obMouseMove);
+  if (_obPreviewPoly)   { S.obMap.removeLayer(_obPreviewPoly);  _obPreviewPoly  = null; }
+  if (_obPreviewLine)   { S.obMap.removeLayer(_obPreviewLine);  _obPreviewLine  = null; }
+  if (_obFirstMarker)   { S.obMap.removeLayer(_obFirstMarker);  _obFirstMarker  = null; }
+  _obVerts = [];
+  S.obMap.getContainer().style.cursor = '';
+  const drawBtn   = document.getElementById('obDrawBtn');
+  const cancelBtn = document.getElementById('obCancelDrawBtn');
+  const finishBtn = document.getElementById('obFinishDrawBtn');
+  const hint      = document.getElementById('obDrawHint');
+  if (drawBtn)   drawBtn.classList.remove('d-none');
+  if (cancelBtn) cancelBtn.classList.add('d-none');
+  if (finishBtn) finishBtn.classList.add('d-none');
+  if (hint)      hint.textContent = '';
+}
+
+function finishDrawingOb() {
+  if (_obVerts.length >= 3) _obSave();
+}
+
+function _obUpdatePreview(cursorPt) {
+  if (_obPreviewPoly)  { S.obMap.removeLayer(_obPreviewPoly);  _obPreviewPoly  = null; }
+  if (_obPreviewLine)  { S.obMap.removeLayer(_obPreviewLine);  _obPreviewLine  = null; }
+  if (_obFirstMarker)  { S.obMap.removeLayer(_obFirstMarker);  _obFirstMarker  = null; }
+
+  if (_obVerts.length >= 2) {
+    _obPreviewPoly = L.polygon(_obVerts, {
+      color: '#dc3545', weight: 2, dashArray: '5 3',
+      fillColor: '#dc3545', fillOpacity: 0.15,
+    }).addTo(S.obMap);
+  }
+  if (cursorPt && _obVerts.length >= 1) {
+    _obPreviewLine = L.polyline([_obVerts[_obVerts.length-1], cursorPt], {
+      color: '#dc3545', weight: 1.5, dashArray: '4 3', opacity: 0.6,
+    }).addTo(S.obMap);
+  }
+  // Show first-vertex dot when closeable (>= 3 verts)
+  if (_obVerts.length >= 3) {
+    _obFirstMarker = L.circleMarker(_obVerts[0], {
+      radius: 7, color: '#dc3545', fillColor: '#fff', fillOpacity: 1, weight: 2,
+    }).addTo(S.obMap);
+    _obFirstMarker.bindTooltip('Click to close polygon', { direction: 'top', opacity: 0.85 });
+  }
+}
+
+function _obClick(e) {
+  const pt = [e.latlng.lat, e.latlng.lng];
+
+  // Click near first vertex → close the polygon
+  if (_obVerts.length >= 3) {
+    const fp  = S.obMap.latLngToContainerPoint(L.latLng(_obVerts[0]));
+    const cp  = S.obMap.latLngToContainerPoint(e.latlng);
+    const dx  = fp.x - cp.x, dy = fp.y - cp.y;
+    if (Math.sqrt(dx*dx + dy*dy) < 15) { _obSave(); return; }
+  }
+
+  _obVerts.push(pt);
+  _obUpdatePreview(null);
+
+  const finishBtn = document.getElementById('obFinishDrawBtn');
+  const hint      = document.getElementById('obDrawHint');
+  if (_obVerts.length >= 3) {
+    if (finishBtn) finishBtn.classList.remove('d-none');
+    if (hint) hint.textContent =
+      `${_obVerts.length} vertices — click the white dot or "Finish polygon" to close.`;
+  } else {
+    if (hint) hint.textContent =
+      `${_obVerts.length} ${_obVerts.length === 1 ? 'vertex' : 'vertices'} — need at least 3.`;
+  }
+}
+
+function _obMouseMove(e) {
+  if (!_obVerts.length) return;
+  _obUpdatePreview([e.latlng.lat, e.latlng.lng]);
+}
+
+async function _obSave() {
+  const verts = [..._obVerts];
+  _cancelObDraw();
+  if (verts.length < 3) return;
+  const name = prompt('Name for this out-of-bounds area:', 'Restricted area');
+  if (name === null) return;  // user cancelled
+  const resp = await fetch('/api/out_of_bounds', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name.trim() || 'Restricted area', coords: verts }),
+  });
+  if (resp.ok) {
+    const item = await resp.json();
+    S.outOfBounds.push(item);
+    _renderObsOnMap();
+    renderObsTable();
+  }
+}
+
+// ── Utils ──────────────────────────────────────────────────────────────────
+function esc(str) {
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+loadData();
+</script>
+</body>
+</html>

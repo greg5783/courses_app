@@ -1,0 +1,290 @@
+[
+  {
+    "id": "7A",
+    "code": "7A",
+    "name": "Gymp",
+    "color": "",
+    "mark_type": "yellow_circle_sm",
+    "lat": 50.8845,
+    "lon": -1.4027
+  },
+  {
+    "id": "7B",
+    "code": "7B",
+    "name": "Hythe Knock",
+    "color": "R",
+    "mark_type": "red_can_sm",
+    "lat": 50.8805,
+    "lon": -1.3968
+  },
+  {
+    "id": "7C",
+    "code": "7C",
+    "name": "No 1 Swinging",
+    "color": "R",
+    "mark_type": "red_can_sm",
+    "lat": 50.8907,
+    "lon": -1.3907
+  },
+  {
+    "id": "7D",
+    "code": "7D",
+    "name": "Weston Shelf",
+    "color": "G",
+    "mark_type": "green_cone_sm",
+    "lat": 50.8785,
+    "lon": -1.3877
+  },
+  {
+    "id": "7E",
+    "code": "7E",
+    "name": "Hythe 5",
+    "color": "Y",
+    "mark_type": "yellow_circle_sm",
+    "lat": 50.8707,
+    "lon": -1.3863
+  },
+  {
+    "id": "7F",
+    "code": "7F",
+    "name": "Jib *",
+    "color": "Y",
+    "mark_type": "yellow_circle_sm",
+    "lat": 50.8827,
+    "lon": -1.3843
+  },
+  {
+    "id": "7G",
+    "code": "7G",
+    "name": "Hythe 4",
+    "color": "Y",
+    "mark_type": "yellow_circle_sm",
+    "lat": 50.8698,
+    "lon": -1.385
+  },
+  {
+    "id": "7H",
+    "code": "7H",
+    "name": "Moorhead",
+    "color": "G",
+    "mark_type": "green_cone_sm",
+    "lat": 50.8758,
+    "lon": -1.3817
+  },
+  {
+    "id": "7I",
+    "code": "7I",
+    "name": "Deans Elbow",
+    "color": "R",
+    "mark_type": "red_can_sm",
+    "lat": 50.87,
+    "lon": -1.3808
+  },
+  {
+    "id": "7K",
+    "code": "7K",
+    "name": "NW Netley",
+    "color": "G",
+    "mark_type": "green_cone_sm",
+    "lat": 50.8718,
+    "lon": -1.3788
+  },
+  {
+    "id": "7L",
+    "code": "7L",
+    "name": "Hovercraft 4",
+    "color": "",
+    "mark_type": "yellow_circle_sm",
+    "lat": 50.8777,
+    "lon": -1.3737
+  },
+  {
+    "id": "7N",
+    "code": "7N",
+    "name": "Royal Southampton *",
+    "color": "Y",
+    "mark_type": "yellow_circle_sm",
+    "lat": 50.8627,
+    "lon": -1.3713
+  },
+  {
+    "id": "7P",
+    "code": "7P",
+    "name": "Hovercraft 3",
+    "color": "Y",
+    "mark_type": "yellow_circle_sm",
+    "lat": 50.8738,
+    "lon": -1.3668
+  },
+  {
+    "id": "7Q",
+    "code": "7Q",
+    "name": "Netley",
+    "color": "G",
+    "mark_type": "green_cone_sm",
+    "lat": 50.8672,
+    "lon": -1.3635
+  },
+  {
+    "id": "7R",
+    "code": "7R",
+    "name": "Lains Lake",
+    "color": "R",
+    "mark_type": "red_can_sm",
+    "lat": 50.8598,
+    "lon": -1.3608
+  },
+  {
+    "id": "7S",
+    "code": "7S",
+    "name": "Deans Lake",
+    "color": "R",
+    "mark_type": "red_can_sm",
+    "lat": 50.8567,
+    "lon": -1.3598
+  },
+  {
+    "id": "7T",
+    "code": "7T",
+    "name": "Hovercraft 2",
+    "color": "",
+    "mark_type": "yellow_circle_sm",
+    "lat": 50.8702,
+    "lon": -1.3597
+  },
+  {
+    "id": "7U",
+    "code": "7U",
+    "name": "Hound",
+    "color": "G",
+    "mark_type": "green_cone_sm",
+    "lat": 50.8613,
+    "lon": -1.3587
+  },
+  {
+    "id": "7V",
+    "code": "7V",
+    "name": "Hovercraft 1",
+    "color": "Y",
+    "mark_type": "yellow_circle_sm",
+    "lat": 50.8665,
+    "lon": -1.3527
+  },
+  {
+    "id": "7W",
+    "code": "7W",
+    "name": "After Barn",
+    "color": "G",
+    "mark_type": "green_cone_sm",
+    "lat": 50.8588,
+    "lon": -1.347
+  },
+  {
+    "id": "7Y",
+    "code": "7Y",
+    "name": "Cadland",
+    "color": "",
+    "mark_type": "yellow_circle_sm",
+    "lat": 50.8503,
+    "lon": -1.3423
+  },
+  {
+    "id": "7Z",
+    "code": "7Z",
+    "name": "Greenland",
+    "color": "",
+    "mark_type": "yellow_circle_sm",
+    "lat": 50.8518,
+    "lon": -1.3397
+  },
+  {
+    "id": "70",
+    "code": "70",
+    "name": "Cathead *",
+    "color": "Y",
+    "mark_type": "yellow_circle_sm",
+    "lat": 50.8435,
+    "lon": -1.3207
+  },
+  {
+    "id": "71",
+    "code": "71",
+    "name": "Mark *",
+    "color": "",
+    "mark_type": "yellow_circle_sm",
+    "lat": 50.826,
+    "lon": -1.3157
+  },
+  {
+    "id": "72",
+    "code": "72",
+    "name": "Hamble Point",
+    "color": "YB",
+    "mark_type": "yellow_circle_lg",
+    "lat": 50.8358,
+    "lon": -1.311
+  },
+  {
+    "id": "73",
+    "code": "73",
+    "name": "Bald Head",
+    "color": "G",
+    "mark_type": "green_cone_sm",
+    "lat": 50.83,
+    "lon": -1.3012
+  },
+  {
+    "id": "74",
+    "code": "74",
+    "name": "Sposa *",
+    "color": "Y",
+    "mark_type": "yellow_circle_sm",
+    "lat": 50.8277,
+    "lon": -1.2932
+  },
+  {
+    "id": "75",
+    "code": "75",
+    "name": "Magazine *",
+    "color": "",
+    "mark_type": "yellow_circle_sm",
+    "lat": 50.8772,
+    "lon": -1.3997
+  },
+  {
+    "id": "76",
+    "code": "76",
+    "name": "Test",
+    "color": "R",
+    "mark_type": "red_can_sm",
+    "lat": 50.8765,
+    "lon": -1.3908
+  },
+  {
+    "id": "77",
+    "code": "77",
+    "name": "Fawley Deep",
+    "color": "G",
+    "mark_type": "green_cone_sm",
+    "lat": 50.8403,
+    "lon": -1.3198
+  },
+  {
+    "id": "HI1",
+    "code": "HI1",
+    "name": "Hythe Inshore 1",
+    "color": "Y",
+    "mark_type": "yellow_circle_sm",
+    "lat": 50.861627,
+    "lon": -1.377148
+  },
+  {
+    "id": "HI2",
+    "code": "HI2",
+    "name": "Hythe Inshore 2",
+    "color": "Y",
+    "mark_type": "yellow_circle_sm",
+    "lat": 50.858587,
+    "lon": -1.37004
+  }
+]
