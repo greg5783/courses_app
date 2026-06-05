@@ -91,6 +91,21 @@
           <button class="btn btn-outline-danger btn-sm w-100" onclick="openObsModal()">
             🚫 Out-of-bounds areas
           </button>
+          {% if logged_in %}
+          <hr class="my-2">
+          <div class="d-flex gap-1 align-items-center mb-1">
+            <span class="small text-muted" style="min-width:64px">Waypoints:</span>
+            <button class="btn btn-outline-success btn-sm flex-fill" onclick="exportWaypoints()">⬇ Export</button>
+            <button class="btn btn-outline-info btn-sm flex-fill" onclick="document.getElementById('importWpInput').click()">⬆ Import</button>
+            <input type="file" id="importWpInput" accept=".json" style="display:none;" onchange="importWaypoints(event)">
+          </div>
+          <div class="d-flex gap-1 align-items-center">
+            <span class="small text-muted" style="min-width:64px">Series:</span>
+            <button class="btn btn-outline-success btn-sm flex-fill" onclick="exportSeries()">⬇ Export</button>
+            <button class="btn btn-outline-info btn-sm flex-fill" onclick="document.getElementById('importSeriesInput').click()">⬆ Import</button>
+            <input type="file" id="importSeriesInput" accept=".json" style="display:none;" onchange="importSeries(event)">
+          </div>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -1722,6 +1737,94 @@ async function _obSave() {
     S.outOfBounds.push(item);
     _renderObsOnMap();
     renderObsTable();
+  }
+}
+
+// ── Import/Export ──────────────────────────────────────────────────────────
+
+async function exportWaypoints() {
+  try {
+    const url = '/api/export/waypoints?include_obs=1';
+    const response = await fetch(url);
+    if (!response.ok) { alert('Export failed'); return; }
+    const blob = await response.blob();
+    const a = document.createElement('a');
+    a.href = window.URL.createObjectURL(blob);
+    a.download = `waypoints_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(a.href);
+    a.remove();
+  } catch (err) {
+    alert('Export failed: ' + err.message);
+  }
+}
+
+async function importWaypoints(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await fetch('/api/import/waypoints', { method: 'POST', body: formData });
+    if (!response.ok) {
+      const error = await response.json();
+      alert('Import failed: ' + (error.error || 'Unknown error'));
+      return;
+    }
+    const result = await response.json();
+    let msg = `Import successful!\n\nImported ${result.imported_waypoints} waypoint(s)`;
+    if (result.imported_obs) msg += `\nImported ${result.imported_obs} out-of-bounds area(s)`;
+    alert(msg);
+    await loadData();
+  } catch (err) {
+    alert('Import failed: ' + err.message);
+  } finally {
+    event.target.value = '';
+  }
+}
+
+async function exportSeries() {
+  try {
+    const response = await fetch('/api/export/series');
+    if (!response.ok) { alert('Export failed'); return; }
+    const blob = await response.blob();
+    const a = document.createElement('a');
+    a.href = window.URL.createObjectURL(blob);
+    a.download = `series_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(a.href);
+    a.remove();
+  } catch (err) {
+    alert('Export failed: ' + err.message);
+  }
+}
+
+async function importSeries(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await fetch('/api/import/series', { method: 'POST', body: formData });
+    if (!response.ok) {
+      const error = await response.json();
+      alert('Import failed: ' + (error.error || 'Unknown error'));
+      return;
+    }
+    const result = await response.json();
+    let msg = 'Import successful!\n\n';
+    if (result.imported_series_types != null) msg += `Imported ${result.imported_series_types} series type(s)\n`;
+    if (result.imported_series != null) msg += `Imported ${result.imported_series} series\n`;
+    if (result.imported_courses != null) msg += `Imported ${result.imported_courses} course(s)\n`;
+    alert(msg.trim());
+    await loadData();
+    if (S.selectedStId) renderCourses(S.selectedStId);
+  } catch (err) {
+    alert('Import failed: ' + err.message);
+  } finally {
+    event.target.value = '';
   }
 }
 
