@@ -1267,6 +1267,19 @@ async function loadData() {
   S.collections  = data.collections  || [];
   renderSidebar();
   if (S.selectedStId) renderCourses(S.selectedStId);
+
+  // Auto-open a course if linked directly via ?course=<id>
+  const linkedCourseId = new URLSearchParams(window.location.search).get('course');
+  if (linkedCourseId) {
+    const course = S.courses.find(c => c.id === linkedCourseId);
+    if (course) {
+      const stId = course.series_type_id;
+      S.selectedStId = stId;
+      renderSidebar();
+      renderCourses(stId);
+      openViewModal(linkedCourseId);
+    }
+  }
 }
 
 function activeWaypoints() {
@@ -2934,9 +2947,12 @@ function esc(str) {
 function shareCourse() {
   const course = S.courses.find(c => c.id === S.viewingCourseId);
   if (!course) return;
+  const url = new URL(window.location.href);
+  url.search = '';
+  url.searchParams.set('course', course.id);
   navigator.share({
     title: `${course.name} — SWSA Course Planner`,
-    url: window.location.href,
+    url: url.toString(),
   }).catch(() => {});
 }
 
