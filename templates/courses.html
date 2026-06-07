@@ -143,6 +143,11 @@
         <div id="viewMarkList"></div>
       </div>
       <div class="modal-footer">
+        <button id="viewShareBtn" class="btn btn-outline-secondary me-auto d-none" onclick="shareCourse()" title="Share">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" class="me-1">
+            <path d="M11 2.5a2.5 2.5 0 1 1 .603 1.628l-6.718 3.12a2.499 2.499 0 0 1 0 1.504l6.718 3.12a2.5 2.5 0 1 1-.488.876l-6.718-3.12a2.5 2.5 0 1 1 0-3.256l6.718-3.12A2.5 2.5 0 0 1 11 2.5z"/>
+          </svg>Share
+        </button>
         {% if logged_in %}
         <button class="btn btn-outline-primary" id="viewEditBtn">Edit course</button>
         {% endif %}
@@ -859,6 +864,50 @@ function makeWpDotIcon(wp) {
   });
 }
 
+function windDescription(min, max) {
+  if (min == null || max == null) return null;
+  const delta = ((max - min + 360) % 360) || 360;
+  const mid = (min + delta / 2) % 360;
+  const labels = ['Northerly','North-easterly','Easterly','South-easterly',
+                  'Southerly','South-westerly','Westerly','North-westerly'];
+  return labels[Math.round(mid / 45) % 8];
+}
+
+function windCardSvg(min, max) {
+  if (min == null || max == null) return '';
+  const sz = 36, cx = 18, cy = 18, r = 13;
+  const delta = ((max - min + 360) % 360) || 360;
+  // Arrow points downwind (away from where wind comes from)
+  const arrowBrg = (min + delta / 2 + 180) % 360;
+  const rad = (arrowBrg - 90) * Math.PI / 180;
+  const tx = cx + Math.cos(rad) * (r - 3);
+  const ty = cy + Math.sin(rad) * (r - 3);
+  const bx = cx + Math.cos(rad) * 3;
+  const by = cy + Math.sin(rad) * 3;
+  // Range arc (downwind side)
+  function pt(brg, radius) {
+    const a = (brg - 90) * Math.PI / 180;
+    return [cx + Math.cos(a) * radius, cy + Math.sin(a) * radius];
+  }
+  const arcR = r - 1;
+  const minDown = (min + 180) % 360, maxDown = (max + 180) % 360;
+  const [ax1, ay1] = pt(minDown, arcR), [ax2, ay2] = pt(maxDown, arcR);
+  const largeArc = delta > 180 ? 1 : 0;
+  const arc = `<path d="M ${ax1.toFixed(1)} ${ay1.toFixed(1)} A ${arcR} ${arcR} 0 ${largeArc} 1 ${ax2.toFixed(1)} ${ay2.toFixed(1)}" fill="none" stroke="#fd7e14" stroke-width="2.5" stroke-linecap="round" opacity="0.9"/>`;
+  // Arrow head + shaft
+  const perpRad = rad + Math.PI / 2;
+  const hw = 4;
+  const p1 = [tx + Math.cos(perpRad) * hw, ty + Math.sin(perpRad) * hw];
+  const p2 = [tx - Math.cos(perpRad) * hw, ty - Math.sin(perpRad) * hw];
+  const arrow = `<polygon points="${p1[0].toFixed(1)},${p1[1].toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)} ${bx.toFixed(1)},${by.toFixed(1)}" fill="#fd7e14"/>`;
+  return `<svg width="${sz}" height="${sz}" viewBox="0 0 ${sz} ${sz}" style="flex-shrink:0">
+    <circle cx="${cx}" cy="${cy}" r="${r+2}" fill="#fff" fill-opacity="0.85" stroke="#adb5bd" stroke-width="1"/>
+    ${arc}${arrow}
+    <circle cx="${cx}" cy="${cy}" r="2" fill="#343a40"/>
+    <text x="${cx}" y="${cy - r + 3}" text-anchor="middle" font-size="4.5" fill="#0d6efd" font-family="sans-serif" font-weight="700">N</text>
+  </svg>`;
+}
+
 function normalizeBearingValue(value) {
   if (value === null || value === undefined || value === '') return null;
   const num = Number(value);
@@ -1304,11 +1353,19 @@ function courseCard(c) {
     return `<span class="mark-badge" style="background:${markColor(col)};color:${(col==='Y'||col==='YB')?'#333':'#fff'};font-size:10px">${i+1}</span>${esc(name)}<span class="ms-1 text-muted" style="font-size:9px">${rnd}</span>`;
   }).map(h => `<li class="small py-1">${h}</li>`).join('');
 
+  const _wn = normalizeBearingValue(c.wind_bearing_min), _wx = normalizeBearingValue(c.wind_bearing_max);
+  const _desc = windDescription(_wn, _wx);
+  const _svg  = windCardSvg(_wn, _wx);
+  const _windRow = (_desc && _svg)
+    ? `<div class="d-flex align-items-center gap-2 mb-2">${_svg}<span class="small text-muted">${_desc}</span></div>`
+    : '';
+
   return `<div class="col-md-6 col-xl-4">
     <div class="card course-card h-100" onclick="openViewModal('${c.id}')">
       <div class="card-body">
         <h6 class="card-title fw-semibold mb-1">${esc(c.name)}</h6>
-        <p class="text-muted small mb-2">${marks.length} mark${marks.length !== 1 ? 's' : ''}${marks.length >= 2 ? (() => { const bs = c.boat_speed ?? 5, bf = c.beat_factor ?? 0.7, wn = normalizeBearingValue(c.wind_bearing_min), wx = normalizeBearingValue(c.wind_bearing_max); return ` &middot; ${courseDist(marks).toFixed(2)} nm &middot; ~${formatETA(courseETA(marks, wn, wx, bs, bf))}`; })() : ''}</p>
+        <p class="text-muted small mb-2">${marks.length} mark${marks.length !== 1 ? 's' : ''}${marks.length >= 2 ? (() => { const bs = c.boat_speed ?? 5, bf = c.beat_factor ?? 0.7; return ` &middot; ${courseDist(marks).toFixed(2)} nm &middot; ~${formatETA(courseETA(marks, _wn, _wx, bs, bf))}`; })() : ''}</p>
+        ${_windRow}
         <ul class="list-unstyled mb-0">${markNames}</ul>
       </div>
       <div class="card-footer bg-transparent py-2 d-flex justify-content-end gap-2">
@@ -1333,6 +1390,9 @@ function openViewModal(courseId) {
       openCourseEditor(courseId);
     };
   }
+
+  const shareBtn = document.getElementById('viewShareBtn');
+  if (shareBtn) shareBtn.classList.toggle('d-none', !navigator.share);
 
   // Build mark list
   const marks = course.marks || [];
@@ -2868,6 +2928,16 @@ async function importSeries(event) {
 // ── Utils ──────────────────────────────────────────────────────────────────
 function esc(str) {
   return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Share ──────────────────────────────────────────────────────────────────
+function shareCourse() {
+  const course = S.courses.find(c => c.id === S.viewingCourseId);
+  if (!course) return;
+  navigator.share({
+    title: `${course.name} — SWSA Course Planner`,
+    url: window.location.href,
+  }).catch(() => {});
 }
 
 // ── Boot ───────────────────────────────────────────────────────────────────
