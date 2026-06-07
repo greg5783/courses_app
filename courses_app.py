@@ -124,6 +124,7 @@ def create_waypoint():
         'name':          d.get('name', '').strip(),
         'color':         d.get('color', '').strip(),
         'mark_type':     d.get('mark_type', ''),
+        'kind':          d.get('kind', ''),
         'collection_id': d.get('collection_id', ''),
         'lat':           float(d['lat']),
         'lon':           float(d['lon']),
@@ -144,6 +145,7 @@ def update_waypoint(wid):
             wp['name']          = d.get('name',          wp['name']).strip()
             wp['color']         = d.get('color',         wp.get('color', '')).strip()
             wp['mark_type']     = d.get('mark_type',     wp.get('mark_type', ''))
+            wp['kind']          = d.get('kind',          wp.get('kind', ''))
             wp['collection_id'] = d.get('collection_id', wp.get('collection_id', ''))
             wp['lat']           = float(d.get('lat', wp['lat']))
             wp['lon']           = float(d.get('lon', wp['lon']))

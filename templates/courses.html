@@ -172,13 +172,25 @@
             <select class="form-select" id="editorSeriesType"></select>
           </div>
           <div class="col-md-3">
-            <label class="form-label fw-semibold">Wind bearing</label>
-            <div class="input-group">
-              <input id="editorWindMin" type="number" class="form-control" min="0" max="360" placeholder="Min °" oninput="updateEditorWind()">
-              <span class="input-group-text">to</span>
-              <input id="editorWindMax" type="number" class="form-control" min="0" max="360" placeholder="Max °" oninput="updateEditorWind()">
+            <label class="form-label fw-semibold">Wind bearing
+              <span class="ms-2">
+                <a href="#" id="windModeToggle" class="small text-muted" onclick="toggleWindMode(event)">use range</a>
+              </span>
+            </label>
+            <div id="windSingleInput">
+              <div class="input-group">
+                <input id="editorWindSingle" type="number" class="form-control" min="0" max="360" placeholder="° (±20)" oninput="updateEditorWind()">
+                <span class="input-group-text">°</span>
+              </div>
             </div>
-            <div class="form-text">Enter wind range in degrees (0 = N, 90 = E).</div>
+            <div id="windRangeInput" style="display:none">
+              <div class="input-group">
+                <input id="editorWindMin" type="number" class="form-control" min="0" max="360" placeholder="Min °" oninput="updateEditorWind()">
+                <span class="input-group-text">to</span>
+                <input id="editorWindMax" type="number" class="form-control" min="0" max="360" placeholder="Max °" oninput="updateEditorWind()">
+              </div>
+            </div>
+            <div class="form-text">Direction wind comes from (0 = N, 90 = E).</div>
           </div>
         </div>
 
@@ -423,6 +435,13 @@
           <div class="col-12">
             <label class="form-label small">Name</label>
             <input type="text" class="form-control form-control-sm" id="wpEditorName" placeholder="Waypoint name">
+          </div>
+          <div class="col-12">
+            <label class="form-label small">Kind</label>
+            <select class="form-select form-select-sm" id="wpEditorKind">
+              <option value="">Normal mark</option>
+              <option value="balcony">Balcony</option>
+            </select>
           </div>
           <div class="col-6">
             <label class="form-label small">Latitude (°N)</label>
@@ -677,6 +696,7 @@ const S = {
   managingCollectionId: null,
   windBearingMin: null,
   windBearingMax: null,
+  windSingleMode: true,
   boatSpeed: 5,
   beatFactor: 0.7,
   viewMap: null,
@@ -816,6 +836,16 @@ function computeCbPosition(marks) {
   const brg = bearingDeg(m1.lat, m1.lon, m2.lat, m2.lon);
   const offset = markRounding(marks[0]) === 'P' ? 90 : -90;
   return destinationPoint(m1.lat, m1.lon, (brg + offset + 360) % 360, 100 / 1852);
+}
+
+// Small black square for balcony waypoints shown as background on maps
+function makeBalconyWpDotIcon() {
+  const sz = 13;
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:${sz}px;height:${sz}px;background:#111;opacity:0.5;border:1px solid #444;pointer-events:none"></div>`,
+    iconSize: [sz, sz], iconAnchor: [sz/2, sz/2], popupAnchor: [0, -(sz/2 + 3)],
+  });
 }
 
 // Small semi-transparent icon for background (non-course) waypoints
@@ -1192,6 +1222,18 @@ async function loadData() {
 
 function activeWaypoints() {
   const cids = S.seriesTypes.find(s => s.id === S.selectedStId)?.collection_ids || [];
+  const all = cids.length ? S.waypoints.filter(w => !w.collection_id || cids.includes(w.collection_id)) : S.waypoints;
+  return all.filter(w => w.kind !== 'balcony');
+}
+
+function activeBalconyWaypoints() {
+  const cids = S.seriesTypes.find(s => s.id === S.selectedStId)?.collection_ids || [];
+  const all = cids.length ? S.waypoints.filter(w => !w.collection_id || cids.includes(w.collection_id)) : S.waypoints;
+  return all.filter(w => w.kind === 'balcony');
+}
+
+function allActiveWaypoints() {
+  const cids = S.seriesTypes.find(s => s.id === S.selectedStId)?.collection_ids || [];
   if (!cids.length) return S.waypoints;
   return S.waypoints.filter(w => !w.collection_id || cids.includes(w.collection_id));
 }
@@ -1366,11 +1408,12 @@ function initViewMap(markIds, startType, balconyWpId, windMin, windMax) {
     attribution: '© OpenStreetMap contributors', maxZoom: 18,
   }).addTo(map);
 
-  // Background layer: waypoints active for the current series (small, dim)
-  activeWaypoints().forEach(wp => {
-    L.marker([wp.lat, wp.lon], { icon: makeWpDotIcon(wp) })
+  // Background layer: all waypoints (small, dim); balcony shown as black squares
+  allActiveWaypoints().forEach(wp => {
+    const icon = wp.kind === 'balcony' ? makeBalconyWpDotIcon() : makeWpDotIcon(wp);
+    L.marker([wp.lat, wp.lon], { icon })
       .addTo(map)
-      .bindTooltip(`${wp.code} — ${wp.name}`, { direction: 'top', opacity: 0.85 });
+      .bindTooltip(`${wp.code} — ${wp.name}${wp.kind === 'balcony' ? ' (Balcony)' : ''}`, { direction: 'top', opacity: 0.85 });
   });
 
   // Course marks — icons at actual position, course line offset to port/starboard
@@ -1441,8 +1484,6 @@ function openCourseEditor(courseId, prePopulated = null) {
   S.startType   = course?.start_type ?? (course?.include_committee_boat ? 'cb' : 'none');
   S.balconyWpId = course?.balcony_wp_id ?? null;
 
-  document.getElementById('editorWindMin').value   = S.windBearingMin != null ? S.windBearingMin : '';
-  document.getElementById('editorWindMax').value   = S.windBearingMax != null ? S.windBearingMax : '';
   document.getElementById('editorBoatSpeed').value = S.boatSpeed;
   _applyStartTypeUI();
 
@@ -1451,9 +1492,23 @@ function openCourseEditor(courseId, prePopulated = null) {
     S.windBearingMin = normalizeBearingValue(prePopulated.windBearingMin);
     S.windBearingMax = normalizeBearingValue(prePopulated.windBearingMax);
     S.boatSpeed      = prePopulated.boatSpeed ?? S.boatSpeed;
-    document.getElementById('editorWindMin').value   = S.windBearingMin != null ? S.windBearingMin : '';
-    document.getElementById('editorWindMax').value   = S.windBearingMax != null ? S.windBearingMax : '';
     document.getElementById('editorBoatSpeed').value = S.boatSpeed;
+  }
+
+  // Detect whether stored range looks like a ±20° single-bearing range
+  S.windSingleMode = _isSymmetricRange(S.windBearingMin, S.windBearingMax);
+  _applyWindModeUI();
+  if (S.windSingleMode) {
+    let mid = null;
+    if (S.windBearingMin != null && S.windBearingMax != null) {
+      mid = (S.windBearingMax < S.windBearingMin)
+        ? Math.round(((S.windBearingMin + S.windBearingMax + 360) / 2) % 360)
+        : Math.round((S.windBearingMin + S.windBearingMax) / 2);
+    }
+    document.getElementById('editorWindSingle').value = mid != null ? mid : '';
+  } else {
+    document.getElementById('editorWindMin').value = S.windBearingMin != null ? S.windBearingMin : '';
+    document.getElementById('editorWindMax').value = S.windBearingMax != null ? S.windBearingMax : '';
   }
   renderEditorMarkList();
 
@@ -1594,11 +1649,12 @@ function updateEditorMap() {
   // Out-of-bounds overlays (redrawn after the clear; polygons are Polyline subclasses)
   drawObsPolygons(S.editorMap, activeOOB());
 
-  // Background: waypoints active for the current series (small, dim)
-  activeWaypoints().forEach(wp => {
-    L.marker([wp.lat, wp.lon], { icon: makeWpDotIcon(wp) })
+  // Background: all waypoints (small, dim); balcony shown as black squares
+  allActiveWaypoints().forEach(wp => {
+    const icon = wp.kind === 'balcony' ? makeBalconyWpDotIcon() : makeWpDotIcon(wp);
+    L.marker([wp.lat, wp.lon], { icon })
       .addTo(S.editorMap)
-      .bindTooltip(`${wp.code} — ${wp.name}`, { direction: 'top', opacity: 0.85 });
+      .bindTooltip(`${wp.code} — ${wp.name}${wp.kind === 'balcony' ? ' (Balcony)' : ''}`, { direction: 'top', opacity: 0.85 });
   });
 
   // Course marks — icons at actual position, course line offset to port/starboard
@@ -1636,10 +1692,52 @@ function updateEditorMap() {
 }
 
 function updateEditorWind() {
-  S.windBearingMin = normalizeBearingValue(document.getElementById('editorWindMin').value);
-  S.windBearingMax = normalizeBearingValue(document.getElementById('editorWindMax').value);
+  if (S.windSingleMode) {
+    const single = normalizeBearingValue(document.getElementById('editorWindSingle').value);
+    if (single != null) {
+      S.windBearingMin = (single - 20 + 360) % 360;
+      S.windBearingMax = (single + 20) % 360;
+    } else {
+      S.windBearingMin = null;
+      S.windBearingMax = null;
+    }
+  } else {
+    S.windBearingMin = normalizeBearingValue(document.getElementById('editorWindMin').value);
+    S.windBearingMax = normalizeBearingValue(document.getElementById('editorWindMax').value);
+  }
   addMapCompassOverlay(S.editorMap, S.windBearingMin, S.windBearingMax);
   renderEditorMarkList();
+}
+
+function _isSymmetricRange(min, max) {
+  if (min == null || max == null) return true; // default to single mode when nothing set
+  const diff = (max - min + 360) % 360;
+  return diff === 40; // exactly ±20°
+}
+
+function toggleWindMode(e) {
+  e.preventDefault();
+  S.windSingleMode = !S.windSingleMode;
+  _applyWindModeUI();
+  if (S.windSingleMode) {
+    // Derive single value from current min/max midpoint if set
+    if (S.windBearingMin != null && S.windBearingMax != null) {
+      let mid = (S.windBearingMin + S.windBearingMax) / 2;
+      if (S.windBearingMax < S.windBearingMin) mid = ((S.windBearingMin + S.windBearingMax + 360) / 2) % 360;
+      document.getElementById('editorWindSingle').value = Math.round(mid);
+    }
+  } else {
+    document.getElementById('editorWindMin').value = S.windBearingMin != null ? S.windBearingMin : '';
+    document.getElementById('editorWindMax').value = S.windBearingMax != null ? S.windBearingMax : '';
+  }
+  updateEditorWind();
+}
+
+function _applyWindModeUI() {
+  const single = S.windSingleMode;
+  document.getElementById('windSingleInput').style.display = single ? '' : 'none';
+  document.getElementById('windRangeInput').style.display  = single ? 'none' : '';
+  document.getElementById('windModeToggle').textContent    = single ? 'use range' : 'use single';
 }
 
 function updateEditorSpeed() {
@@ -1968,9 +2066,10 @@ function initWpMap() {
   colWps.forEach(w => {
     const ll = [w.lat, w.lon];
     latlngs.push(ll);
-    const marker = L.marker(ll, { icon: makeMarkIcon(getMarkType(w), w.code), draggable: loggedIn })
+    const icon = w.kind === 'balcony' ? makeBalconyIcon() : makeMarkIcon(getMarkType(w), w.code);
+    const marker = L.marker(ll, { icon, draggable: loggedIn })
       .addTo(map)
-      .bindTooltip(w.name, { permanent: false, direction: 'top' });
+      .bindTooltip(w.kind === 'balcony' ? `${w.name} (Balcony)` : w.name, { permanent: false, direction: 'top' });
 
     if (loggedIn) {
       let origLatLng = L.latLng(w.lat, w.lon);
@@ -2014,10 +2113,15 @@ function renderWpTable() {
     return;
   }
   body.innerHTML = sorted.map(w => {
-    const mt = markTypeDef(getMarkType(w));
-    const typeCell = `${shapeSvg(mt.shape, mt.fill, mt.stroke, 20)}<small class="ms-1">${mt.label}</small>`;
+    let typeCell;
+    if (w.kind === 'balcony') {
+      typeCell = `<div style="display:inline-block;width:14px;height:14px;background:#111;border:1px solid #444;vertical-align:middle"></div><small class="ms-1">Balcony</small>`;
+    } else {
+      const mt = markTypeDef(getMarkType(w));
+      typeCell = `${shapeSvg(mt.shape, mt.fill, mt.stroke, 20)}<small class="ms-1">${mt.label}</small>`;
+    }
     const editBtns = loggedIn
-      ? `<button class="btn btn-outline-primary btn-sm py-0 px-1 me-1" title="Change appearance" onclick="openMarkTypePicker('${w.id}')">🎨</button>
+      ? `${w.kind !== 'balcony' ? `<button class="btn btn-outline-primary btn-sm py-0 px-1 me-1" title="Change appearance" onclick="openMarkTypePicker('${w.id}')">🎨</button>` : ''}
          <button class="btn btn-outline-secondary btn-sm py-0 px-1" onclick="openWpEditor('${w.id}')">✎</button>`
       : '';
     return `<tr>
@@ -2038,6 +2142,7 @@ function openWpEditor(wpId) {
   document.getElementById('wpEditorCode').value  = wp ? wp.code : '';
   document.getElementById('wpEditorName').value  = wp ? wp.name : '';
   document.getElementById('wpEditorColor').value = wp ? (wp.color || '') : '';
+  document.getElementById('wpEditorKind').value  = wp ? (wp.kind || '') : '';
   document.getElementById('wpEditorLat').value   = wp ? wp.lat : '';
   document.getElementById('wpEditorLon').value   = wp ? wp.lon : '';
   const delBtn = document.getElementById('wpDeleteBtn');
@@ -2051,13 +2156,10 @@ function openWpEditor(wpId) {
 // ── Start type (CB / Balcony / Neither) ────────────────────────────────────
 
 function makeBalconyIcon() {
-  const sz = 11;
+  const sz = 14;
   return L.divIcon({
     className: '',
-    html: `<div style="width:${sz}px;height:${sz}px;background:#111;color:#fff;opacity:0.55;
-                       display:flex;align-items:center;justify-content:center;
-                       font-size:6px;font-weight:700;font-family:sans-serif;
-                       border:1px solid #555;pointer-events:none">B</div>`,
+    html: `<div style="width:${sz}px;height:${sz}px;background:#111;border:2px solid #444;pointer-events:none"></div>`,
     iconSize: [sz, sz], iconAnchor: [sz/2, sz/2], popupAnchor: [0, -(sz/2 + 4)],
   });
 }
@@ -2116,18 +2218,21 @@ function _applyStartTypeUI() {
   // Show/hide balcony waypoint select
   const row = document.getElementById('balconyWpRow');
   const sel = document.getElementById('balconyWpSelect');
-  const wps = activeWaypoints();
+  const balconyWps = activeBalconyWaypoints();
 
-  // Grey out balcony radio if no waypoints available
+  // Disable balcony radio if no balcony waypoints exist in this collection
   const balconyRadio = document.getElementById('startBalcony');
-  if (balconyRadio) balconyRadio.disabled = wps.length === 0;
+  if (balconyRadio) {
+    balconyRadio.disabled = balconyWps.length === 0;
+    balconyRadio.title = balconyWps.length === 0 ? 'Add a waypoint with kind "Balcony" to enable this' : '';
+  }
 
   if (S.startType === 'balcony') {
     row.classList.remove('d-none');
-    sel.innerHTML = wps.map(w =>
+    sel.innerHTML = balconyWps.map(w =>
       `<option value="${w.id}" ${w.id === S.balconyWpId ? 'selected' : ''}>${esc(w.code)} — ${esc(w.name)}</option>`
     ).join('');
-    if (!S.balconyWpId && wps.length) S.balconyWpId = wps[0].id;
+    if (!S.balconyWpId && balconyWps.length) S.balconyWpId = balconyWps[0].id;
   } else {
     row.classList.add('d-none');
   }
@@ -2212,6 +2317,7 @@ async function saveWaypoint() {
     code:          document.getElementById('wpEditorCode').value.trim(),
     name:          document.getElementById('wpEditorName').value.trim(),
     color:         document.getElementById('wpEditorColor').value,
+    kind:          document.getElementById('wpEditorKind').value,
     collection_id: S.managingCollectionId || '',
     lat, lon,
   };
@@ -2260,9 +2366,10 @@ function initObMap() {
     ? S.waypoints.filter(w => w.collection_id === S.managingCollectionId)
     : S.waypoints;
   colWps.forEach(wp => {
-    L.marker([wp.lat, wp.lon], { icon: makeWpDotIcon(wp) })
+    const icon = wp.kind === 'balcony' ? makeBalconyWpDotIcon() : makeWpDotIcon(wp);
+    L.marker([wp.lat, wp.lon], { icon })
       .addTo(map)
-      .bindTooltip(`${wp.code} — ${wp.name}`, { direction: 'top', opacity: 0.85 });
+      .bindTooltip(`${wp.code} — ${wp.name}${wp.kind === 'balcony' ? ' (Balcony)' : ''}`, { direction: 'top', opacity: 0.85 });
   });
 
   _renderObsOnMap();
