@@ -459,6 +459,54 @@
 
 
 
+<!-- ── Waypoints export modal ──────────────────────────────────────────── -->
+<div class="modal fade" id="wpExportModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h5 class="modal-title">Export waypoints</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-2">Select which collections to include in the export:</p>
+        <div class="d-flex gap-2 mb-2">
+          <button class="btn btn-outline-secondary btn-sm" onclick="wpExportToggleAll(true)">Select all</button>
+          <button class="btn btn-outline-secondary btn-sm" onclick="wpExportToggleAll(false)">None</button>
+        </div>
+        <div id="wpExportChecks" style="max-height:320px;overflow-y:auto"></div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-success btn-sm" onclick="doExportWaypoints()">⬇ Download</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Waypoints import modal ──────────────────────────────────────────── -->
+<div class="modal fade" id="wpImportModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h5 class="modal-title">Import waypoints</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-2">Select which collections to import:</p>
+        <div class="d-flex gap-2 mb-2">
+          <button class="btn btn-outline-secondary btn-sm" onclick="wpImportToggleAll(true)">Select all</button>
+          <button class="btn btn-outline-secondary btn-sm" onclick="wpImportToggleAll(false)">None</button>
+        </div>
+        <div id="wpImportChecks" style="max-height:320px;overflow-y:auto"></div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="doImportWaypoints()">⬆ Import selected</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── Auto-create course modal ────────────────────────────────────────── -->
 <div class="modal fade" id="autoCreateModal" tabindex="-1" data-bs-backdrop="static" data-bs-focus="false">
   <div class="modal-dialog modal-lg">
@@ -2424,45 +2472,158 @@ async function deleteCurrentCollection() {
 
 // ── Import/Export ──────────────────────────────────────────────────────────
 
-async function exportWaypoints() {
-  try {
-    const url = '/api/export/waypoints?include_obs=1';
-    const response = await fetch(url);
-    if (!response.ok) { alert('Export failed'); return; }
-    const blob = await response.blob();
-    const a = document.createElement('a');
-    a.href = window.URL.createObjectURL(blob);
-    a.download = `waypoints_${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(a.href);
-    a.remove();
-  } catch (err) {
-    alert('Export failed: ' + err.message);
-  }
+// ── Waypoints export ───────────────────────────────────────────────────────
+
+function exportWaypoints() {
+  const checks = document.getElementById('wpExportChecks');
+  // Unassigned row + one row per collection
+  const unassignedCount = S.waypoints.filter(w => !w.collection_id).length;
+  const unassignedObs   = S.outOfBounds.filter(o => !o.collection_id).length;
+  checks.innerHTML = `
+    <div class="form-check py-1 border-bottom">
+      <input class="form-check-input" type="checkbox" id="wpExpUnassigned" value="" checked>
+      <label class="form-check-label" for="wpExpUnassigned">
+        <span class="fw-semibold">Unassigned</span>
+        <small class="text-muted ms-1">${unassignedCount} waypoint(s), ${unassignedObs} OOB area(s)</small>
+      </label>
+    </div>` +
+    S.collections.map(col => {
+      const wc = S.waypoints.filter(w => w.collection_id === col.id).length;
+      const oc = S.outOfBounds.filter(o => o.collection_id === col.id).length;
+      return `<div class="form-check py-1 border-bottom">
+        <input class="form-check-input" type="checkbox" id="wpExp_${col.id}" value="${col.id}" checked>
+        <label class="form-check-label" for="wpExp_${col.id}">
+          <span class="fw-semibold">${esc(col.name)}</span>
+          <small class="text-muted ms-1">${wc} waypoint(s), ${oc} OOB area(s)</small>
+        </label>
+      </div>`;
+    }).join('');
+  new bootstrap.Modal(document.getElementById('wpExportModal')).show();
 }
 
-async function importWaypoints(event) {
+function wpExportToggleAll(checked) {
+  document.querySelectorAll('#wpExportChecks .form-check-input').forEach(cb => cb.checked = checked);
+}
+
+function doExportWaypoints() {
+  const selected = new Set(
+    [...document.querySelectorAll('#wpExportChecks .form-check-input')]
+      .filter(cb => cb.checked).map(cb => cb.value)
+  );
+  const includeUnassigned = selected.has('');
+
+  const waypoints   = S.waypoints.filter(w => selected.has(w.collection_id || '') || (includeUnassigned && !w.collection_id));
+  const outOfBounds = S.outOfBounds.filter(o => selected.has(o.collection_id || '') || (includeUnassigned && !o.collection_id));
+  const collections = S.collections.filter(c => selected.has(c.id));
+
+  const pkg = JSON.stringify({ format_version: '1.1', exported_at: Date.now(), collections, waypoints, out_of_bounds: outOfBounds }, null, 2);
+  const blob = new Blob([pkg], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `waypoints_${new Date().toISOString().split('T')[0]}.json`;
+  document.body.appendChild(a);
+  a.click();
+  URL.revokeObjectURL(a.href);
+  a.remove();
+  bootstrap.Modal.getInstance(document.getElementById('wpExportModal')).hide();
+}
+
+// ── Waypoints import ───────────────────────────────────────────────────────
+
+let _pendingImport = null;
+
+function importWaypoints(event) {
   const file = event.target.files?.[0];
+  event.target.value = '';
   if (!file) return;
-  try {
-    const formData = new FormData();
-    formData.append('file', file);
-    const response = await fetch('/api/import/waypoints', { method: 'POST', body: formData });
-    if (!response.ok) {
-      const error = await response.json();
-      alert('Import failed: ' + (error.error || 'Unknown error'));
-      return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    let pkg;
+    try { pkg = JSON.parse(e.target.result); }
+    catch { alert('Invalid JSON file.'); return; }
+    if (!pkg.waypoints) { alert('Invalid file: missing waypoints.'); return; }
+
+    _pendingImport = pkg;
+    const checks = document.getElementById('wpImportChecks');
+    const fileCols = pkg.collections || [];
+
+    if (!fileCols.length) {
+      // No collection info — just show total count and import directly
+      checks.innerHTML = `<p class="text-muted small">This file has no collection data.<br>
+        ${pkg.waypoints.length} waypoint(s) and ${(pkg.out_of_bounds||[]).length} OOB area(s) will be imported.</p>`;
+    } else {
+      const unassignedWps = (pkg.waypoints || []).filter(w => !w.collection_id).length;
+      const unassignedObs = (pkg.out_of_bounds || []).filter(o => !o.collection_id).length;
+      checks.innerHTML = (unassignedWps || unassignedObs ? `
+        <div class="form-check py-1 border-bottom">
+          <input class="form-check-input" type="checkbox" id="wpImpUnassigned" value="" checked>
+          <label class="form-check-label" for="wpImpUnassigned">
+            <span class="fw-semibold">Unassigned</span>
+            <small class="text-muted ms-1">${unassignedWps} waypoint(s), ${unassignedObs} OOB area(s)</small>
+          </label>
+        </div>` : '') +
+        fileCols.map(col => {
+          const wc = (pkg.waypoints || []).filter(w => w.collection_id === col.id).length;
+          const oc = (pkg.out_of_bounds || []).filter(o => o.collection_id === col.id).length;
+          const exists = S.collections.some(c => c.id === col.id) ? ' <span class="badge bg-secondary" style="font-size:9px">already exists</span>' : '';
+          return `<div class="form-check py-1 border-bottom">
+            <input class="form-check-input" type="checkbox" id="wpImp_${col.id}" value="${col.id}" checked>
+            <label class="form-check-label" for="wpImp_${col.id}">
+              <span class="fw-semibold">${esc(col.name)}</span>${exists}
+              <small class="text-muted ms-1">${wc} waypoint(s), ${oc} OOB area(s)</small>
+            </label>
+          </div>`;
+        }).join('');
     }
-    const result = await response.json();
-    let msg = `Import successful!\n\nImported ${result.imported_waypoints} waypoint(s)`;
-    if (result.imported_obs) msg += `\nImported ${result.imported_obs} out-of-bounds area(s)`;
-    alert(msg);
+    new bootstrap.Modal(document.getElementById('wpImportModal')).show();
+  };
+  reader.readAsText(file);
+}
+
+function wpImportToggleAll(checked) {
+  document.querySelectorAll('#wpImportChecks .form-check-input').forEach(cb => cb.checked = checked);
+}
+
+async function doImportWaypoints() {
+  const pkg = _pendingImport;
+  if (!pkg) return;
+
+  const fileCols = pkg.collections || [];
+  let waypoints, outOfBounds, collections;
+
+  if (!fileCols.length) {
+    // No collection info — import everything
+    waypoints = pkg.waypoints || [];
+    outOfBounds = pkg.out_of_bounds || [];
+    collections = [];
+  } else {
+    const selected = new Set(
+      [...document.querySelectorAll('#wpImportChecks .form-check-input')]
+        .filter(cb => cb.checked).map(cb => cb.value)
+    );
+    const includeUnassigned = selected.has('');
+    waypoints   = (pkg.waypoints || []).filter(w => selected.has(w.collection_id || '') || (includeUnassigned && !w.collection_id));
+    outOfBounds = (pkg.out_of_bounds || []).filter(o => selected.has(o.collection_id || '') || (includeUnassigned && !o.collection_id));
+    collections = fileCols.filter(c => selected.has(c.id));
+  }
+
+  try {
+    const resp = await fetch('/api/import/waypoints', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ waypoints, out_of_bounds: outOfBounds, collections }),
+    });
+    if (!resp.ok) { const e = await resp.json(); alert('Import failed: ' + (e.error || 'Unknown')); return; }
+    const result = await resp.json();
+    bootstrap.Modal.getInstance(document.getElementById('wpImportModal')).hide();
+    _pendingImport = null;
+    let msg = `Imported ${result.imported_waypoints} waypoint(s)`;
+    if (result.imported_obs)         msg += `, ${result.imported_obs} OOB area(s)`;
+    if (result.imported_collections) msg += `, ${result.imported_collections} collection(s)`;
+    alert('Import successful!\n\n' + msg);
     await loadData();
   } catch (err) {
     alert('Import failed: ' + err.message);
-  } finally {
-    event.target.value = '';
   }
 }
 

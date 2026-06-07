@@ -399,19 +399,33 @@ def export_waypoints():
 @app.route('/api/import/waypoints', methods=['POST'])
 @login_required
 def import_waypoints():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file provided'}), 400
-    file = request.files['file']
-    if not file.filename.endswith('.json'):
-        return jsonify({'error': 'File must be JSON'}), 400
     try:
-        package = json.load(file)
+        if request.content_type and request.content_type.startswith('application/json'):
+            package = request.get_json(force=True)
+        elif 'file' in request.files:
+            file = request.files['file']
+            if not file.filename.endswith('.json'):
+                return jsonify({'error': 'File must be JSON'}), 400
+            package = json.load(file)
+        else:
+            return jsonify({'error': 'No data provided'}), 400
+
         if 'waypoints' not in package:
             return jsonify({'error': 'Invalid file: missing waypoints'}), 400
+
+        imported_collections = 0
+        if 'collections' in package and package['collections']:
+            existing_cols = _load(COLLECTIONS_FILE)
+            existing_col_ids = {c['id'] for c in existing_cols}
+            new_cols = [c for c in package['collections'] if c['id'] not in existing_col_ids]
+            _save(COLLECTIONS_FILE, existing_cols + new_cols)
+            imported_collections = len(new_cols)
+
         existing_wp = _load(WAYPOINTS_FILE)
         existing_ids = {w['id'] for w in existing_wp}
         new_wp = [w for w in package['waypoints'] if w['id'] not in existing_ids]
         _save(WAYPOINTS_FILE, existing_wp + new_wp)
+
         imported_obs = 0
         if 'out_of_bounds' in package:
             existing_obs = _load(OBS_FILE)
@@ -419,10 +433,11 @@ def import_waypoints():
             new_obs = [o for o in package['out_of_bounds'] if o['id'] not in existing_obs_ids]
             _save(OBS_FILE, existing_obs + new_obs)
             imported_obs = len(new_obs)
+
         return jsonify({
             'ok': True,
+            'imported_collections': imported_collections,
             'imported_waypoints': len(new_wp),
-            'total_waypoints': len(existing_wp) + len(new_wp),
             'imported_obs': imported_obs,
         }), 201
     except json.JSONDecodeError:
