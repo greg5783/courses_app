@@ -86,7 +86,7 @@
         </div>
         <div class="card-footer py-2 d-flex flex-column gap-1">
           <button class="btn btn-outline-secondary btn-sm w-100" onclick="openCollectionsModal()">
-            🗂 Manage collections
+            🗂 Manage waypoint collections
           </button>
           {% if logged_in %}
           <hr class="my-2">
@@ -190,14 +190,6 @@
               <span class="input-group-text">kts</span>
             </div>
           </div>
-          <div class="col-md-3">
-            <label class="form-label fw-semibold">Beat speed</label>
-            <div class="input-group">
-              <input id="editorBeatFactor" type="number" class="form-control" min="10" max="100" step="5" placeholder="70" oninput="updateEditorSpeed()">
-              <span class="input-group-text">%</span>
-            </div>
-            <div class="form-text">% of boat speed on beat legs.</div>
-          </div>
         </div>
 
         <div class="row g-3">
@@ -215,9 +207,23 @@
               <p class="text-muted small mb-0" id="editorNoMarks">No marks yet.</p>
             </div>
             <div class="mt-2">
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="cbIncludeCheck" onchange="toggleCB()">
-                <label class="form-check-label" for="cbIncludeCheck">Include committee boat</label>
+              <label class="form-label fw-semibold small mb-1">Start</label>
+              <div class="d-flex flex-column gap-1">
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="startType" id="startNone" value="none" checked onchange="setStartType('none')">
+                  <label class="form-check-label" for="startNone">Neither</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="startType" id="startCB" value="cb" onchange="setStartType('cb')">
+                  <label class="form-check-label" for="startCB">Committee boat</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="startType" id="startBalcony" value="balcony" onchange="setStartType('balcony')">
+                  <label class="form-check-label" for="startBalcony">Balcony</label>
+                </div>
+              </div>
+              <div id="balconyWpRow" class="mt-1 d-none">
+                <select class="form-select form-select-sm" id="balconyWpSelect" onchange="setBalconyWp(this.value)"></select>
               </div>
             </div>
           </div>
@@ -548,13 +554,6 @@
             </div>
           </div>
           <div class="col-md-3">
-            <label class="form-label fw-semibold">Beat speed</label>
-            <div class="input-group input-group-sm">
-              <input id="acBeatFactor" type="number" class="form-control" min="10" max="100" step="5" value="70">
-              <span class="input-group-text">%</span>
-            </div>
-          </div>
-          <div class="col-md-3">
             <label class="form-label fw-semibold">Wind from</label>
             <div class="input-group input-group-sm">
               <input id="acWindBearing" type="number" class="form-control" min="0" max="360" placeholder="e.g. 225">
@@ -575,10 +574,24 @@
             <label class="form-label fw-semibold">Min marks</label>
             <input id="acMinMarks" type="number" class="form-control form-control-sm" min="2" max="15" step="1" value="3">
           </div>
-          <div class="col-md-5 d-flex align-items-start pt-4">
-            <div class="form-check mt-1">
-              <input class="form-check-input" type="checkbox" id="acLoop" checked>
-              <label class="form-check-label" for="acLoop">Loop course — return to start</label>
+          <div class="col-md-5">
+            <label class="form-label fw-semibold">End of course</label>
+            <div class="d-flex flex-column gap-1">
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="acEndMode" id="acEndLoop" value="loop" checked onchange="acEndModeChange()">
+                <label class="form-check-label" for="acEndLoop">Loop — return to start</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="acEndMode" id="acEndFixed" value="fixed" onchange="acEndModeChange()">
+                <label class="form-check-label" for="acEndFixed">Fixed end point</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="acEndMode" id="acEndOpen" value="open" onchange="acEndModeChange()">
+                <label class="form-check-label" for="acEndOpen">Open course</label>
+              </div>
+            </div>
+            <div id="acEndWpRow" class="mt-1 d-none">
+              <select id="acEndWp" class="form-select form-select-sm"></select>
             </div>
           </div>
         </div>
@@ -659,7 +672,8 @@ const S = {
   viewingCourseId: null,
   editingCourseId: null,
   editorMarks: [],       // array of waypoint ID strings OR custom mark objects
-  includeCommitteeBoat: false,
+  startType: 'none',      // 'none' | 'cb' | 'balcony'
+  balconyWpId: null,
   managingCollectionId: null,
   windBearingMin: null,
   windBearingMax: null,
@@ -1304,11 +1318,18 @@ function openViewModal(courseId) {
       }).join('')
     : '<p class="text-muted">No marks defined.</p>';
   let listHtml = markHtml;
-  if (course.include_committee_boat) {
+  const _st = course.start_type ?? (course.include_committee_boat ? 'cb' : 'none');
+  if (_st === 'cb') {
     listHtml += `<div class="mark-row mt-2 pt-2" style="border-top:2px solid #333">
       <span class="mark-badge" style="background:#111;color:#fff;border-radius:2px">CB</span>
       <span class="fw-semibold">Committee Boat</span>
       <span class="ms-2 text-muted small">auto-positioned 100 m from mark 1</span>
+    </div>`;
+  } else if (_st === 'balcony') {
+    const bwp = wpById(course.balcony_wp_id);
+    listHtml += `<div class="mark-row mt-2 pt-2" style="border-top:2px solid #333">
+      <span class="mark-badge" style="background:#111;color:#fff;border-radius:2px">B</span>
+      <span class="fw-semibold">Balcony${bwp ? ` — ${esc(bwp.code)} ${esc(bwp.name)}` : ''}</span>
     </div>`;
   }
   const windInfo = Number.isFinite(course.wind_bearing_min) && Number.isFinite(course.wind_bearing_max)
@@ -1333,11 +1354,11 @@ function openViewModal(courseId) {
   modal.show();
 
   document.getElementById('viewModal').addEventListener('shown.bs.modal', () => {
-    initViewMap(marks, course.include_committee_boat || false, course.wind_bearing_min, course.wind_bearing_max);
+    initViewMap(marks, _st, course.balcony_wp_id || null, course.wind_bearing_min, course.wind_bearing_max);
   }, { once: true });
 }
 
-function initViewMap(markIds, includeCommitteeBoat, windMin, windMax) {
+function initViewMap(markIds, startType, balconyWpId, windMin, windMax) {
   if (S.viewMap) { S.viewMap.remove(); S.viewMap = null; }
   const map = L.map('viewMap');
   S.viewMap = map;
@@ -1372,20 +1393,7 @@ function initViewMap(markIds, includeCommitteeBoat, windMin, windMax) {
   const coursePath = buildRoutedPath(roundingOffsetPositions(markIds));
   drawCourseRoute(map, coursePath, '#0d6efd');
 
-  // Committee boat — auto-positioned perpendicular to M1→M2, 100 m from M1
-  if (includeCommitteeBoat && markIds.length >= 2) {
-    const cb = computeCbPosition(markIds);
-    if (cb) {
-      const m1 = resolveMark(markIds[0]);
-      L.polyline([[m1.lat, m1.lon], [cb.lat, cb.lon]], {
-        color: '#111', weight: 2, dashArray: '6 5', opacity: 0.75,
-      }).addTo(map);
-      L.marker([cb.lat, cb.lon], { icon: makeCBSquareIcon() })
-        .addTo(map)
-        .bindPopup('<strong>Committee Boat</strong>');
-      markLatlngs.push([cb.lat, cb.lon]);
-    }
-  }
+  drawStartMarker(map, markIds, markLatlngs, startType, balconyWpId);
 
   if (coursePath.length > 1) {
     const bounds = L.latLngBounds(coursePath);
@@ -1425,27 +1433,27 @@ function openCourseEditor(courseId, prePopulated = null) {
   ).join('');
 
   // Marks + committee boat flag — normalise legacy string marks to {wp, rounding} objects
-  S.editorMarks = (course?.marks || []).map(normaliseMark);
-  S.includeCommitteeBoat = !!(course?.include_committee_boat);
+  S.editorMarks    = (course?.marks || []).map(normaliseMark);
   S.windBearingMin = normalizeBearingValue(course?.wind_bearing_min);
   S.windBearingMax = normalizeBearingValue(course?.wind_bearing_max);
-  S.boatSpeed  = course?.boat_speed  ?? 5;
-  S.beatFactor = course?.beat_factor ?? 0.7;
-  document.getElementById('cbIncludeCheck').checked = S.includeCommitteeBoat;
-  document.getElementById('editorWindMin').value    = S.windBearingMin != null ? S.windBearingMin : '';
-  document.getElementById('editorWindMax').value    = S.windBearingMax != null ? S.windBearingMax : '';
-  document.getElementById('editorBoatSpeed').value  = S.boatSpeed;
-  document.getElementById('editorBeatFactor').value = Math.round(S.beatFactor * 100);
+  S.boatSpeed      = course?.boat_speed ?? 5;
+  // Derive startType — support legacy include_committee_boat field
+  S.startType   = course?.start_type ?? (course?.include_committee_boat ? 'cb' : 'none');
+  S.balconyWpId = course?.balcony_wp_id ?? null;
+
+  document.getElementById('editorWindMin').value   = S.windBearingMin != null ? S.windBearingMin : '';
+  document.getElementById('editorWindMax').value   = S.windBearingMax != null ? S.windBearingMax : '';
+  document.getElementById('editorBoatSpeed').value = S.boatSpeed;
+  _applyStartTypeUI();
+
   if (prePopulated) {
     S.editorMarks    = (prePopulated.marks || []).map(normaliseMark);
     S.windBearingMin = normalizeBearingValue(prePopulated.windBearingMin);
     S.windBearingMax = normalizeBearingValue(prePopulated.windBearingMax);
-    S.boatSpeed      = prePopulated.boatSpeed  ?? S.boatSpeed;
-    S.beatFactor     = prePopulated.beatFactor ?? S.beatFactor;
-    document.getElementById('editorWindMin').value    = S.windBearingMin != null ? S.windBearingMin : '';
-    document.getElementById('editorWindMax').value    = S.windBearingMax != null ? S.windBearingMax : '';
-    document.getElementById('editorBoatSpeed').value  = S.boatSpeed;
-    document.getElementById('editorBeatFactor').value = Math.round(S.beatFactor * 100);
+    S.boatSpeed      = prePopulated.boatSpeed ?? S.boatSpeed;
+    document.getElementById('editorWindMin').value   = S.windBearingMin != null ? S.windBearingMin : '';
+    document.getElementById('editorWindMax').value   = S.windBearingMax != null ? S.windBearingMax : '';
+    document.getElementById('editorBoatSpeed').value = S.boatSpeed;
   }
   renderEditorMarkList();
 
@@ -1621,20 +1629,7 @@ function updateEditorMap() {
   if (markLatlngs.length > 1) S.editorMap.fitBounds(L.latLngBounds(markLatlngs).pad(0.15));
   else if (markLatlngs.length === 1) S.editorMap.setView(markLatlngs[0], 13);
 
-  // Committee boat — auto-positioned perpendicular to M1→M2, 100 m from M1
-  if (S.includeCommitteeBoat) {
-    const cb = computeCbPosition(S.editorMarks);
-    if (cb) {
-      const m1 = resolveMark(S.editorMarks[0]);
-      L.polyline([[m1.lat, m1.lon], [cb.lat, cb.lon]], {
-        color: '#111', weight: 2, dashArray: '6 5', opacity: 0.75,
-      }).addTo(S.editorMap);
-      L.marker([cb.lat, cb.lon], { icon: makeCBSquareIcon() })
-        .addTo(S.editorMap)
-        .bindPopup('<strong>Committee Boat</strong><br><small>Auto-positioned 100 m from mark 1</small>');
-      markLatlngs.push([cb.lat, cb.lon]);
-    }
-  }
+  drawStartMarker(S.editorMap, S.editorMarks, markLatlngs);
 
   addMapCompassOverlay(S.editorMap, S.windBearingMin, S.windBearingMax);
   S.editorMap.invalidateSize();
@@ -1648,8 +1643,7 @@ function updateEditorWind() {
 }
 
 function updateEditorSpeed() {
-  S.boatSpeed  = parseFloat(document.getElementById('editorBoatSpeed').value)  || 5;
-  S.beatFactor = (parseFloat(document.getElementById('editorBeatFactor').value) || 70) / 100;
+  S.boatSpeed = parseFloat(document.getElementById('editorBoatSpeed').value) || 5;
   renderEditorMarkList();
 }
 
@@ -1663,11 +1657,12 @@ async function saveEditorCourse() {
     name,
     series_type_id: stId,
     marks: S.editorMarks,
-    include_committee_boat: S.includeCommitteeBoat,
+    start_type:    S.startType,
+    balcony_wp_id: S.balconyWpId || null,
     wind_bearing_min: S.windBearingMin,
     wind_bearing_max: S.windBearingMax,
-    boat_speed:  parseFloat(document.getElementById('editorBoatSpeed').value)  || 5,
-    beat_factor: (parseFloat(document.getElementById('editorBeatFactor').value) || 70) / 100,
+    boat_speed:  parseFloat(document.getElementById('editorBoatSpeed').value) || 5,
+    beat_factor: 0.7,
   };
   const url     = S.editingCourseId ? `/api/courses/${S.editingCourseId}` : '/api/courses';
   const method  = S.editingCourseId ? 'PUT' : 'POST';
@@ -1695,14 +1690,24 @@ async function deleteCourseFromEditor() {
 
 function openAutoCreateModal() {
   const sorted = [...activeWaypoints()].sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
-  const sel = document.getElementById('acStartWp');
-  sel.innerHTML = sorted.map(w =>
+  const optHtml = sorted.map(w =>
     `<option value="${w.id}" style="padding:3px 6px">${esc(w.code)} — ${esc(w.name)}</option>`
   ).join('');
-  if (sorted.length) sel.selectedIndex = 0;
+  const startSel = document.getElementById('acStartWp');
+  startSel.innerHTML = optHtml;
+  if (sorted.length) startSel.selectedIndex = 0;
+  const endSel = document.getElementById('acEndWp');
+  endSel.innerHTML = optHtml;
+  if (sorted.length) endSel.selectedIndex = sorted.length > 1 ? 1 : 0;
   document.getElementById('acError').classList.add('d-none');
   acUpdateProportions();
+  acEndModeChange();
   bootstrap.Modal.getOrCreateInstance(document.getElementById('autoCreateModal')).show();
+}
+
+function acEndModeChange() {
+  const mode = document.querySelector('input[name="acEndMode"]:checked')?.value || 'loop';
+  document.getElementById('acEndWpRow').classList.toggle('d-none', mode !== 'fixed');
 }
 
 function acTargetTypeChange() {
@@ -1733,12 +1738,13 @@ function generateAutoCourse() {
   const isDist     = document.getElementById('acTargetDist').checked;
   const distVal    = parseFloat(document.getElementById('acDistVal').value);
   const timeVal    = parseFloat(document.getElementById('acTimeVal').value);
-  const boatSpeed  = parseFloat(document.getElementById('acBoatSpeed').value)  || 5;
-  const beatFactor = (parseFloat(document.getElementById('acBeatFactor').value) || 70) / 100;
+  const boatSpeed   = parseFloat(document.getElementById('acBoatSpeed').value) || 5;
+  const beatFactor  = 0.7;
   const windBearing = normalizeBearingValue(document.getElementById('acWindBearing').value);
-  const startWpId  = document.getElementById('acStartWp').value;
-  const isLoop     = document.getElementById('acLoop').checked;
-  const minMarks   = Math.max(2, parseInt(document.getElementById('acMinMarks').value) || 3);
+  const startWpId   = document.getElementById('acStartWp').value;
+  const endMode     = document.querySelector('input[name="acEndMode"]:checked')?.value || 'loop';
+  const endWpId     = document.getElementById('acEndWp').value;
+  const minMarks    = Math.max(2, parseInt(document.getElementById('acMinMarks').value) || 3);
   const rawBeat    = parseInt(document.getElementById('acBeatPct').value)  || 0;
   const rawReach   = parseInt(document.getElementById('acReachPct').value) || 0;
   const rawRun     = parseInt(document.getElementById('acRunPct').value)   || 0;
@@ -1835,8 +1841,10 @@ function generateAutoCourse() {
     accumulated += legContrib(currentWp, best);
   }
 
-  if (isLoop && sequence.length >= 2 && sequence[sequence.length - 1] !== sequence[0]) {
+  if (endMode === 'loop' && sequence.length >= 2 && sequence[sequence.length - 1] !== sequence[0]) {
     sequence.push(sequence[0]);
+  } else if (endMode === 'fixed' && endWpId && sequence[sequence.length - 1] !== endWpId) {
+    sequence.push(endWpId);
   }
 
   if (sequence.length < 2) {
@@ -1853,7 +1861,7 @@ function generateAutoCourse() {
       let rounding = 'S';
       const n = seq.length;
       let prevId, nextId;
-      if (i === 0 && isLoop && n >= 3) {
+      if (i === 0 && endMode === 'loop' && n >= 3) {
         prevId = seq[n - 2]; nextId = seq[1];
       } else if (i > 0 && i < n - 1) {
         prevId = seq[i - 1]; nextId = seq[i + 1];
@@ -1875,7 +1883,7 @@ function generateAutoCourse() {
   const assignedMarks = assignRoundings(sequence);
 
   bootstrap.Modal.getOrCreateInstance(document.getElementById('autoCreateModal')).hide();
-  openCourseEditor(null, { marks: assignedMarks, windBearingMin: windBearing, windBearingMax: windBearing, boatSpeed, beatFactor });
+  openCourseEditor(null, { marks: assignedMarks, windBearingMin: windBearing, windBearingMax: windBearing, boatSpeed });
 }
 
 // ── Series type modal ──────────────────────────────────────────────────────
@@ -2040,10 +2048,89 @@ function openWpEditor(wpId) {
   new bootstrap.Modal(document.getElementById('wpEditorModal')).show();
 }
 
-// ── Committee boat ─────────────────────────────────────────────────────────
-function toggleCB() {
-  S.includeCommitteeBoat = document.getElementById('cbIncludeCheck').checked;
+// ── Start type (CB / Balcony / Neither) ────────────────────────────────────
+
+function makeBalconyIcon() {
+  const sz = 11;
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:${sz}px;height:${sz}px;background:#111;color:#fff;opacity:0.55;
+                       display:flex;align-items:center;justify-content:center;
+                       font-size:6px;font-weight:700;font-family:sans-serif;
+                       border:1px solid #555;pointer-events:none">B</div>`,
+    iconSize: [sz, sz], iconAnchor: [sz/2, sz/2], popupAnchor: [0, -(sz/2 + 4)],
+  });
+}
+
+// Shared helper: draw CB or Balcony onto any map.
+// marks can be S.editorMarks (objects) or markIds array; markLatlngs is extended in-place.
+// If startType/balconyWpId are omitted, reads from S (editor context).
+function drawStartMarker(map, marks, markLatlngs, startType, balconyWpId) {
+  const st  = startType  !== undefined ? startType  : S.startType;
+  const bwp = balconyWpId !== undefined ? balconyWpId : S.balconyWpId;
+  if (marks.length < 2) return;
+
+  if (st === 'cb') {
+    const cb = computeCbPosition(marks);
+    if (!cb) return;
+    const m1 = resolveMark(marks[0]);
+    L.polyline([[m1.lat, m1.lon], [cb.lat, cb.lon]], {
+      color: '#111', weight: 2, dashArray: '6 5', opacity: 0.75,
+    }).addTo(map);
+    L.marker([cb.lat, cb.lon], { icon: makeCBSquareIcon() })
+      .addTo(map)
+      .bindPopup('<strong>Committee Boat</strong><br><small>Auto-positioned 100 m from mark 1</small>');
+    markLatlngs.push([cb.lat, cb.lon]);
+
+  } else if (st === 'balcony' && bwp) {
+    const balconyWp = wpById(bwp);
+    if (!balconyWp) return;
+    const m1 = resolveMark(marks[0]);
+    if (!m1) return;
+    L.polyline([[balconyWp.lat, balconyWp.lon], [m1.lat, m1.lon]], {
+      color: '#111', weight: 2, dashArray: '6 5', opacity: 0.75,
+    }).addTo(map);
+    L.marker([balconyWp.lat, balconyWp.lon], { icon: makeBalconyIcon() })
+      .addTo(map)
+      .bindPopup(`<strong>Balcony</strong><br><small>${esc(balconyWp.code)} — ${esc(balconyWp.name)}</small>`);
+    markLatlngs.push([balconyWp.lat, balconyWp.lon]);
+  }
+}
+
+function setStartType(val) {
+  S.startType = val;
+  _applyStartTypeUI();
   updateEditorMap();
+}
+
+function setBalconyWp(wpId) {
+  S.balconyWpId = wpId;
+  updateEditorMap();
+}
+
+function _applyStartTypeUI() {
+  // Set the correct radio
+  const radio = document.querySelector(`input[name="startType"][value="${S.startType}"]`);
+  if (radio) radio.checked = true;
+
+  // Show/hide balcony waypoint select
+  const row = document.getElementById('balconyWpRow');
+  const sel = document.getElementById('balconyWpSelect');
+  const wps = activeWaypoints();
+
+  // Grey out balcony radio if no waypoints available
+  const balconyRadio = document.getElementById('startBalcony');
+  if (balconyRadio) balconyRadio.disabled = wps.length === 0;
+
+  if (S.startType === 'balcony') {
+    row.classList.remove('d-none');
+    sel.innerHTML = wps.map(w =>
+      `<option value="${w.id}" ${w.id === S.balconyWpId ? 'selected' : ''}>${esc(w.code)} — ${esc(w.name)}</option>`
+    ).join('');
+    if (!S.balconyWpId && wps.length) S.balconyWpId = wps[0].id;
+  } else {
+    row.classList.add('d-none');
+  }
 }
 
 // ── Mark type picker ───────────────────────────────────────────────────────

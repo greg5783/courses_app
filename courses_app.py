@@ -298,7 +298,8 @@ def create_course():
         'name':           d.get('name', '').strip(),
         'series_type_id': d.get('series_type_id', ''),
         'marks':          d.get('marks', []),
-        'include_committee_boat': d.get('include_committee_boat', False),
+        'start_type':    d.get('start_type', 'none'),
+        'balcony_wp_id': d.get('balcony_wp_id', None),
         'wind_bearing_min': d.get('wind_bearing_min', None),
         'wind_bearing_max': d.get('wind_bearing_max', None),
         'boat_speed':  d.get('boat_speed', 5),
@@ -319,7 +320,8 @@ def update_course(cid):
             course['name']           = d.get('name',           course['name']).strip()
             course['series_type_id'] = d.get('series_type_id', course['series_type_id'])
             course['marks']          = d.get('marks',          course['marks'])
-            course['include_committee_boat'] = d.get('include_committee_boat', course.get('include_committee_boat', False))
+            course['start_type']    = d.get('start_type',    course.get('start_type', 'none'))
+            course['balcony_wp_id'] = d.get('balcony_wp_id', course.get('balcony_wp_id', None))
             course['wind_bearing_min'] = d.get('wind_bearing_min', course.get('wind_bearing_min'))
             course['wind_bearing_max'] = d.get('wind_bearing_max', course.get('wind_bearing_max'))
             course['boat_speed']  = d.get('boat_speed',  course.get('boat_speed',  5))
