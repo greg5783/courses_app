@@ -1,6 +1,9 @@
 [
   {
     "id": "1780088857250",
-    "name": "Weekend Series"
+    "name": "Weekend Series",
+    "collection_ids": [
+      "1780841755742"
+    ]
   }
 ]

@@ -34,7 +34,10 @@
       "lon": -1.3594722747802734
     },
     "wind_bearing_min": 270,
-    "wind_bearing_max": 271
+    "wind_bearing_max": 271,
+    "include_committee_boat": true,
+    "boat_speed": 5,
+    "beat_factor": 0.7
   },
   {
     "id": "1780091894517",
@@ -71,25 +74,63 @@
       "lon": -1.3695342930948429
     },
     "wind_bearing_min": 200,
-    "wind_bearing_max": 225
+    "wind_bearing_max": 225,
+    "include_committee_boat": true,
+    "boat_speed": 5,
+    "beat_factor": 0.7
   },
   {
     "id": "1780092074761",
     "name": "L Class 1",
     "series_type_id": "1780088857250",
     "marks": [
-      "7T",
-      "7N",
-      "HI1",
-      "7K",
-      "7T",
-      "7U",
-      "7W",
-      "7S",
-      "7N",
-      "7T"
+      {
+        "wp": "7T",
+        "rounding": "S"
+      },
+      {
+        "wp": "7N",
+        "rounding": "S"
+      },
+      {
+        "wp": "HI1",
+        "rounding": "S"
+      },
+      {
+        "wp": "7K",
+        "rounding": "S"
+      },
+      {
+        "wp": "7T",
+        "rounding": "S"
+      },
+      {
+        "wp": "7U",
+        "rounding": "S"
+      },
+      {
+        "wp": "7W",
+        "rounding": "S"
+      },
+      {
+        "wp": "7S",
+        "rounding": "S"
+      },
+      {
+        "wp": "7N",
+        "rounding": "S"
+      },
+      {
+        "wp": "7T",
+        "rounding": "S"
+      }
     ],
-    "committee_boat": null
+    "committee_boat": null,
+    "include_committee_boat": true,
+    "wind_bearing_min": null,
+    "wind_bearing_max": null,
+    "boat_speed": 5,
+    "beat_factor": 0.7
   },
   {
     "id": "1780606111500",

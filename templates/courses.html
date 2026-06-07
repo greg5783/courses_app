@@ -85,11 +85,8 @@
           <div class="list-group-item text-muted small">Loading…</div>
         </div>
         <div class="card-footer py-2 d-flex flex-column gap-1">
-          <button class="btn btn-outline-secondary btn-sm w-100" onclick="openWaypointsModal()">
-            📍 Manage waypoints
-          </button>
-          <button class="btn btn-outline-danger btn-sm w-100" onclick="openObsModal()">
-            🚫 Out-of-bounds areas
+          <button class="btn btn-outline-secondary btn-sm w-100" onclick="openCollectionsModal()">
+            🗂 Manage collections
           </button>
           {% if logged_in %}
           <hr class="my-2">
@@ -217,9 +214,11 @@
             <div id="editorMarkList" class="border rounded p-2" style="min-height:120px;">
               <p class="text-muted small mb-0" id="editorNoMarks">No marks yet.</p>
             </div>
-            <div class="mt-2 d-flex gap-2 align-items-center">
-              <button class="btn btn-outline-warning btn-sm" id="cbPlaceBtn" onclick="startPlacingCB()">⚓ Place committee boat</button>
-              <button class="btn btn-outline-danger btn-sm d-none" id="cbRemoveBtn" onclick="removeCB()">Remove CB</button>
+            <div class="mt-2">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="cbIncludeCheck" onchange="toggleCB()">
+                <label class="form-check-label" for="cbIncludeCheck">Include committee boat</label>
+              </div>
             </div>
           </div>
           <div class="col-lg-7">
@@ -241,7 +240,7 @@
 
 <!-- ── Series type modal ──────────────────────────────────────────────── -->
 <div class="modal fade" id="seriesTypeModal" tabindex="-1">
-  <div class="modal-dialog modal-sm">
+  <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title" id="stModalTitle">Series type</h5>
@@ -251,6 +250,10 @@
         <input type="hidden" id="stModalId">
         <label class="form-label">Name</label>
         <input type="text" class="form-control" id="stModalName" placeholder="e.g. Bartley Disc">
+        <hr class="my-3">
+        <label class="form-label fw-semibold">Collections</label>
+        <div id="stCollectionChecks" class="border rounded p-2" style="max-height:160px;overflow-y:auto"></div>
+        <div class="form-text">Only waypoints and OOB areas in checked collections will show for this series. Leave all unchecked to show everything.</div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-danger me-auto d-none" id="stDeleteBtn" onclick="deleteSeriesType()">Delete</button>
@@ -262,46 +265,132 @@
 </div>
 
 
-<!-- ── Waypoints manager modal ────────────────────────────────────────── -->
-<div class="modal fade" id="waypointsModal" tabindex="-1">
+<!-- ── Collections manager modal (combined: list + detail with WP/OOB tabs) ── -->
+<div class="modal fade" id="collectionsModal" tabindex="-1" data-bs-backdrop="static" data-bs-focus="false">
   <div class="modal-dialog modal-xl">
     <div class="modal-content">
-      <div class="modal-header py-2">
-        <h5 class="modal-title">Waypoints — Zone 7 Southampton Water</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body p-0">
-        <div id="wpMap" style="height:360px;border-bottom:1px solid #dee2e6"></div>
+
+      <!-- LIST VIEW -->
+      <div id="colListView">
+        <div class="modal-header py-2">
+          <h5 class="modal-title">Collections</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-0">
+          <div style="max-height:420px;overflow-y:auto">
+            <table class="table table-sm table-hover mb-0">
+              <thead class="table-light sticky-top">
+                <tr>
+                  <th class="ps-3">Name</th>
+                  <th>Waypoints</th>
+                  <th>OOB areas</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="collectionsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
         {% if logged_in %}
-        <p class="text-muted px-3 pt-2 mb-1" style="font-size:11px">
-          💡 Drag any mark on the map to reposition it — you'll be asked to confirm before saving.
-        </p>
+        <div class="modal-footer justify-content-start py-2 gap-2">
+          <input type="text" class="form-control form-control-sm" id="newColName"
+                 placeholder="New collection name" style="width:240px"
+                 onkeydown="if(event.key==='Enter')addCollectionInline()">
+          <button class="btn btn-outline-primary btn-sm" onclick="addCollectionInline()">+ Add</button>
+          <button class="btn btn-secondary btn-sm ms-auto" data-bs-dismiss="modal">Close</button>
+        </div>
+        {% else %}
+        <div class="modal-footer py-2">
+          <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+        </div>
         {% endif %}
-        <div style="max-height:280px;overflow-y:auto">
-          <table class="table table-sm table-hover mb-0" id="wpTable">
-            <thead class="table-light sticky-top">
-              <tr>
-                <th>Code</th><th>Name</th><th>Type</th>
-                <th>Lat</th><th>Lon</th>
-                {% if logged_in %}<th></th>{% endif %}
-              </tr>
-            </thead>
-            <tbody id="wpTableBody"></tbody>
-          </table>
+      </div>
+
+      <!-- DETAIL VIEW -->
+      <div id="colDetailView" class="d-none">
+        <div class="modal-header py-2">
+          <button class="btn btn-sm btn-outline-secondary me-2" onclick="showCollectionList()">← Back</button>
+          <h5 class="modal-title mb-0" id="colDetailName">Collection</h5>
+          {% if logged_in %}
+          <button class="btn btn-sm btn-outline-secondary ms-2" onclick="renameCurrentCollection()">Rename</button>
+          <button class="btn btn-sm btn-outline-danger ms-1" onclick="deleteCurrentCollection()">Delete</button>
+          {% endif %}
+          <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-0">
+          <ul class="nav nav-tabs px-3 pt-2">
+            <li class="nav-item">
+              <button class="nav-link active" id="colWpTab" onclick="switchColTab('wps')">Waypoints</button>
+            </li>
+            <li class="nav-item">
+              <button class="nav-link" id="colOobTab" onclick="switchColTab('oob')">Out-of-bounds</button>
+            </li>
+          </ul>
+
+          <!-- Waypoints tab -->
+          <div id="colWpContent">
+            <div id="wpMap" style="height:300px;border-bottom:1px solid #dee2e6"></div>
+            {% if logged_in %}
+            <p class="text-muted px-3 pt-2 mb-1" style="font-size:11px">
+              💡 Drag any mark on the map to reposition it — you'll be asked to confirm before saving.
+            </p>
+            {% endif %}
+            <div style="max-height:220px;overflow-y:auto">
+              <table class="table table-sm table-hover mb-0" id="wpTable">
+                <thead class="table-light sticky-top">
+                  <tr>
+                    <th>Code</th><th>Name</th><th>Type</th>
+                    <th>Lat</th><th>Lon</th>
+                    {% if logged_in %}<th></th>{% endif %}
+                  </tr>
+                </thead>
+                <tbody id="wpTableBody"></tbody>
+              </table>
+            </div>
+            {% if logged_in %}
+            <div class="px-3 py-2 border-top">
+              <button class="btn btn-outline-primary btn-sm" onclick="openWpEditor(null)">+ Add waypoint</button>
+            </div>
+            {% endif %}
+          </div>
+
+          <!-- OOB tab -->
+          <div id="colOobContent" class="d-none">
+            <div id="obMap" style="height:340px;border-bottom:1px solid #dee2e6"></div>
+            {% if logged_in %}
+            <div class="px-3 pt-2 pb-2 d-flex gap-2 align-items-center flex-wrap border-bottom">
+              <button class="btn btn-outline-danger btn-sm" id="obDrawBtn" onclick="startDrawingOb()">+ Draw polygon</button>
+              <button class="btn btn-outline-secondary btn-sm d-none" id="obCancelDrawBtn" onclick="cancelDrawingOb()">Cancel</button>
+              <button class="btn btn-success btn-sm d-none" id="obFinishDrawBtn" onclick="finishDrawingOb()">Finish polygon</button>
+              <span class="text-muted small" id="obDrawHint"></span>
+            </div>
+            {% endif %}
+            <div style="max-height:200px;overflow-y:auto">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="table-light sticky-top">
+                  <tr>
+                    <th class="ps-3">Name</th>
+                    <th>Vertices</th>
+                    {% if logged_in %}<th></th>{% endif %}
+                  </tr>
+                </thead>
+                <tbody id="obTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer py-2">
+          <button class="btn btn-secondary btn-sm" onclick="showCollectionList()">← Back to collections</button>
         </div>
       </div>
-      {% if logged_in %}
-      <div class="modal-footer justify-content-start py-2">
-        <button class="btn btn-outline-primary btn-sm" onclick="openWpEditor(null)">+ Add waypoint</button>
-      </div>
-      {% endif %}
+
     </div>
   </div>
 </div>
 
 
 <!-- ── Waypoint editor modal ──────────────────────────────────────────── -->
-<div class="modal fade" id="wpEditorModal" tabindex="-1">
+<div class="modal fade" id="wpEditorModal" tabindex="-1" data-bs-focus="false">
   <div class="modal-dialog modal-sm">
     <div class="modal-content">
       <div class="modal-header">
@@ -350,7 +439,7 @@
 
 
 <!-- ── Mark type picker modal ─────────────────────────────────────────── -->
-<div class="modal fade" id="markTypeModal" tabindex="-1">
+<div class="modal fade" id="markTypeModal" tabindex="-1" data-bs-focus="false">
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header pb-1">
@@ -368,43 +457,6 @@
 </div>
 
 
-<!-- ── Out-of-bounds modal ────────────────────────────────────────────── -->
-<div class="modal fade" id="obsModal" tabindex="-1">
-  <div class="modal-dialog modal-xl">
-    <div class="modal-content">
-      <div class="modal-header py-2">
-        <h5 class="modal-title">Out-of-bounds areas</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body p-0">
-        <div id="obMap" style="height:400px;border-bottom:1px solid #dee2e6"></div>
-        {% if logged_in %}
-        <div class="px-3 pt-2 pb-2 d-flex gap-2 align-items-center flex-wrap border-bottom">
-          <button class="btn btn-outline-danger btn-sm" id="obDrawBtn" onclick="startDrawingOb()">+ Draw polygon</button>
-          <button class="btn btn-outline-secondary btn-sm d-none" id="obCancelDrawBtn" onclick="cancelDrawingOb()">Cancel</button>
-          <button class="btn btn-success btn-sm d-none" id="obFinishDrawBtn" onclick="finishDrawingOb()">Finish polygon</button>
-          <span class="text-muted small" id="obDrawHint"></span>
-        </div>
-        {% endif %}
-        <div style="max-height:200px;overflow-y:auto">
-          <table class="table table-sm table-hover mb-0">
-            <thead class="table-light sticky-top">
-              <tr>
-                <th class="ps-3">Name</th>
-                <th>Vertices</th>
-                {% if logged_in %}<th></th>{% endif %}
-              </tr>
-            </thead>
-            <tbody id="obTableBody"></tbody>
-          </table>
-        </div>
-      </div>
-      <div class="modal-footer py-2">
-        <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-      </div>
-    </div>
-  </div>
-</div>
 
 
 <!-- ── Auto-create course modal ────────────────────────────────────────── -->
@@ -554,16 +606,17 @@ const S = {
   seriesTypes: [],
   courses: [],
   outOfBounds: [],       // [{id, name, coords:[[lat,lon],...]}]
+  collections: [],       // [{id, name}]
   selectedStId: null,
   viewingCourseId: null,
   editingCourseId: null,
   editorMarks: [],       // array of waypoint ID strings OR custom mark objects
-  committeeBoat: null,   // {lat, lon} or null
+  includeCommitteeBoat: false,
+  managingCollectionId: null,
   windBearingMin: null,
   windBearingMax: null,
   boatSpeed: 5,
   beatFactor: 0.7,
-  placingCB: false,
   viewMap: null,
   editorMap: null,
   wpMap: null,
@@ -602,12 +655,14 @@ function normaliseMark(mark) {
 
 // ── Mark type definitions ──────────────────────────────────────────────────
 const MARK_TYPES = [
-  { id: 'red_can_lg',       label: 'Big red can',         shape: 'can',    fill: '#dc3545', stroke: '#8b0000', size: 36, colorCode: 'R' },
-  { id: 'red_can_sm',       label: 'Small red can',       shape: 'can',    fill: '#dc3545', stroke: '#8b0000', size: 22, colorCode: 'R' },
-  { id: 'green_cone_lg',    label: 'Big green cone',      shape: 'cone',   fill: '#198754', stroke: '#0a3d20', size: 36, colorCode: 'G' },
-  { id: 'green_cone_sm',    label: 'Small green cone',    shape: 'cone',   fill: '#198754', stroke: '#0a3d20', size: 22, colorCode: 'G' },
-  { id: 'yellow_circle_lg', label: 'Big yellow circle',   shape: 'circle', fill: '#e6a817', stroke: '#7d5a00', size: 36, colorCode: 'Y' },
-  { id: 'yellow_circle_sm', label: 'Small yellow circle', shape: 'circle', fill: '#e6a817', stroke: '#7d5a00', size: 22, colorCode: 'Y' },
+  { id: 'red_can_lg',       label: 'Big red can',         shape: 'can',    fill: '#dc3545', stroke: '#8b0000', size: 22, colorCode: 'R' },
+  { id: 'red_can_sm',       label: 'Small red can',       shape: 'can',    fill: '#dc3545', stroke: '#8b0000', size: 11, colorCode: 'R' },
+  { id: 'green_cone_lg',    label: 'Big green cone',      shape: 'cone',   fill: '#198754', stroke: '#0a3d20', size: 22, colorCode: 'G' },
+  { id: 'green_cone_sm',    label: 'Small green cone',    shape: 'cone',   fill: '#198754', stroke: '#0a3d20', size: 11, colorCode: 'G' },
+  { id: 'yellow_circle_lg', label: 'Big yellow circle',   shape: 'circle',   fill: '#e6a817', stroke: '#7d5a00', size: 22, colorCode: 'Y' },
+  { id: 'yellow_circle_sm', label: 'Small yellow circle', shape: 'circle',   fill: '#e6a817', stroke: '#7d5a00', size: 11, colorCode: 'Y' },
+  { id: 'wasp_can_lg',      label: 'Big wasp can',        shape: 'wasp_can', fill: '#f5c400', stroke: '#111',    size: 22, colorCode: 'YB' },
+  { id: 'wasp_can_sm',      label: 'Small wasp can',      shape: 'wasp_can', fill: '#f5c400', stroke: '#111',    size: 11, colorCode: 'YB' },
 ];
 
 const _TYPE_DEFAULT = { R: 'red_can_sm', G: 'green_cone_sm', Y: 'yellow_circle_sm', YB: 'yellow_circle_sm' };
@@ -619,6 +674,16 @@ function shapeSvg(shape, fill, stroke, sz) {
   // pointer-events:none so SVG elements don't swallow clicks on parent buttons.
   const attrs = `viewBox="0 0 24 24" width="${sz}" height="${sz}"
     xmlns="http://www.w3.org/2000/svg" style="pointer-events:none;display:block;overflow:visible"`;
+  if (shape === 'wasp_can') {
+    // Yellow/black striped cylinder
+    return `<svg ${attrs}>
+      <rect x="4" y="9" width="16" height="12" rx="2" fill="#f5c400" stroke="#111" stroke-width="1.5"/>
+      <rect x="4" y="12" width="16" height="2.5" fill="#111"/>
+      <rect x="4" y="17" width="16" height="2.5" fill="#111"/>
+      <ellipse cx="12" cy="9" rx="8" ry="3.5" fill="#f5c400" stroke="#111" stroke-width="1.5"/>
+      <ellipse cx="12" cy="9" rx="5.5" ry="2" fill="#f5c400" stroke="none" opacity="0.35"/>
+    </svg>`;
+  }
   if (shape === 'can') {
     // Cylinder: rectangular body + elliptical top rim
     return `<svg ${attrs}>
@@ -653,20 +718,42 @@ function makeMarkIcon(typeId, seqNum) {
   });
 }
 
-function makeCBIcon() {
-  const w = 46, h = 28;
-  const svg = `<svg viewBox="0 0 46 28" width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">
-    <path d="M2,23 L6,14 L40,14 L44,23 Q23,30 2,23Z" fill="#fd7e14" stroke="#b84000" stroke-width="1.5"/>
-    <path d="M10,14 L10,7 L34,7 L34,14" fill="#fff" stroke="#ccc" stroke-width="1"/>
-    <circle cx="23" cy="10.5" r="2" fill="#ddd" stroke="#aaa" stroke-width="0.5"/>
-    <line x1="23" y1="1" x2="23" y2="7" stroke="#444" stroke-width="1.5"/>
-    <polygon points="23,1 32,4 23,7" fill="#dc3545" stroke="#8b0000" stroke-width="0.5"/>
-  </svg>`;
+function makeCBSquareIcon() {
+  const sz = 11;
   return L.divIcon({
     className: '',
-    html: svg,
-    iconSize: [w, h], iconAnchor: [w/2, h/2], popupAnchor: [0, -(h/2 + 4)],
+    html: `<div style="width:${sz}px;height:${sz}px;background:#111;color:#fff;opacity:0.55;
+                       display:flex;align-items:center;justify-content:center;
+                       font-size:6px;font-weight:700;font-family:sans-serif;
+                       border:1px solid #555;pointer-events:none">CB</div>`,
+    iconSize: [sz, sz], iconAnchor: [sz/2, sz/2], popupAnchor: [0, -(sz/2 + 4)],
   });
+}
+
+function bearingDeg(lat1, lon1, lat2, lon2) {
+  const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180;
+  const Δλ = (lon2 - lon1) * Math.PI / 180;
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
+function destinationPoint(lat, lon, brg, distNm) {
+  const R = 3440.065;
+  const d = distNm / R;
+  const φ1 = lat * Math.PI / 180, λ1 = lon * Math.PI / 180, θ = brg * Math.PI / 180;
+  const φ2 = Math.asin(Math.sin(φ1) * Math.cos(d) + Math.cos(φ1) * Math.sin(d) * Math.cos(θ));
+  const λ2 = λ1 + Math.atan2(Math.sin(θ) * Math.sin(d) * Math.cos(φ1), Math.cos(d) - Math.sin(φ1) * Math.sin(φ2));
+  return { lat: φ2 * 180 / Math.PI, lon: λ2 * 180 / Math.PI };
+}
+
+function computeCbPosition(marks) {
+  if (marks.length < 2) return null;
+  const m1 = resolveMark(marks[0]), m2 = resolveMark(marks[1]);
+  if (!m1 || !m2) return null;
+  const brg = bearingDeg(m1.lat, m1.lon, m2.lat, m2.lon);
+  const offset = markRounding(marks[0]) === 'P' ? 90 : -90;
+  return destinationPoint(m1.lat, m1.lon, (brg + offset + 360) % 360, 100 / 1852);
 }
 
 // Small semi-transparent icon for background (non-course) waypoints
@@ -863,8 +950,8 @@ function drawCourseRoute(map, latlngs, color) {
 }
 
 // Render all OOB polygons as semi-transparent red overlays on any map
-function drawObsPolygons(map) {
-  S.outOfBounds.forEach(ob => {
+function drawObsPolygons(map, obsArray) {
+  (obsArray !== undefined ? obsArray : S.outOfBounds).forEach(ob => {
     if (ob.coords.length < 3) return;
     L.polygon(ob.coords, {
       color: '#dc3545', weight: 2, dashArray: '6 4',
@@ -924,15 +1011,16 @@ function _segBlockedByPoly(p1, p2, poly) {
 }
 
 function _segIsBlocked(p1, p2) {
-  return S.outOfBounds.some(ob => _segBlockedByPoly(p1, p2, ob.coords));
+  return activeOOB().some(ob => _segBlockedByPoly(p1, p2, ob.coords));
 }
 
 // Visibility-graph Dijkstra: route a single segment from→to around all OOB
 // polygons. Returns the shortest sequence of [lat,lon] points.
 function routeSegment(from, to) {
-  if (!S.outOfBounds.length || !_segIsBlocked(from, to)) return [from, to];
+  const oob = activeOOB();
+  if (!oob.length || !_segIsBlocked(from, to)) return [from, to];
 
-  const nodes = [from, to, ...S.outOfBounds.flatMap(ob => ob.coords)];
+  const nodes = [from, to, ...oob.flatMap(ob => ob.coords)];
   const n = nodes.length;
   const adj = Array.from({length: n}, () => []);
 
@@ -1035,8 +1123,21 @@ async function loadData() {
   S.seriesTypes  = data.series_types;
   S.courses      = data.courses;
   S.outOfBounds  = data.out_of_bounds || [];
+  S.collections  = data.collections  || [];
   renderSidebar();
   if (S.selectedStId) renderCourses(S.selectedStId);
+}
+
+function activeWaypoints() {
+  const cids = S.seriesTypes.find(s => s.id === S.selectedStId)?.collection_ids || [];
+  if (!cids.length) return S.waypoints;
+  return S.waypoints.filter(w => !w.collection_id || cids.includes(w.collection_id));
+}
+
+function activeOOB() {
+  const cids = S.seriesTypes.find(s => s.id === S.selectedStId)?.collection_ids || [];
+  if (!cids.length) return S.outOfBounds;
+  return S.outOfBounds.filter(o => !o.collection_id || cids.includes(o.collection_id));
 }
 
 // ── Sidebar ────────────────────────────────────────────────────────────────
@@ -1155,11 +1256,11 @@ function openViewModal(courseId) {
       }).join('')
     : '<p class="text-muted">No marks defined.</p>';
   let listHtml = markHtml;
-  if (course.committee_boat) {
-    listHtml += `<div class="mark-row mt-2 pt-2" style="border-top:2px solid #fd7e14">
-      <span class="mark-badge" style="background:#fd7e14;color:#fff;border-radius:4px">CB</span>
+  if (course.include_committee_boat) {
+    listHtml += `<div class="mark-row mt-2 pt-2" style="border-top:2px solid #333">
+      <span class="mark-badge" style="background:#111;color:#fff;border-radius:2px">CB</span>
       <span class="fw-semibold">Committee Boat</span>
-      <span class="ms-2 text-muted small">${course.committee_boat.lat.toFixed(4)}, ${course.committee_boat.lon.toFixed(4)}</span>
+      <span class="ms-2 text-muted small">auto-positioned 100 m from mark 1</span>
     </div>`;
   }
   const windInfo = Number.isFinite(course.wind_bearing_min) && Number.isFinite(course.wind_bearing_max)
@@ -1184,11 +1285,11 @@ function openViewModal(courseId) {
   modal.show();
 
   document.getElementById('viewModal').addEventListener('shown.bs.modal', () => {
-    initViewMap(marks, course.committee_boat || null, course.wind_bearing_min, course.wind_bearing_max);
+    initViewMap(marks, course.include_committee_boat || false, course.wind_bearing_min, course.wind_bearing_max);
   }, { once: true });
 }
 
-function initViewMap(markIds, committeeBoat, windMin, windMax) {
+function initViewMap(markIds, includeCommitteeBoat, windMin, windMax) {
   if (S.viewMap) { S.viewMap.remove(); S.viewMap = null; }
   const map = L.map('viewMap');
   S.viewMap = map;
@@ -1196,8 +1297,8 @@ function initViewMap(markIds, committeeBoat, windMin, windMax) {
     attribution: '© OpenStreetMap contributors', maxZoom: 18,
   }).addTo(map);
 
-  // Background layer: all listed waypoints (small, dim)
-  S.waypoints.forEach(wp => {
+  // Background layer: waypoints active for the current series (small, dim)
+  activeWaypoints().forEach(wp => {
     L.marker([wp.lat, wp.lon], { icon: makeWpDotIcon(wp) })
       .addTo(map)
       .bindTooltip(`${wp.code} — ${wp.name}`, { direction: 'top', opacity: 0.85 });
@@ -1219,16 +1320,23 @@ function initViewMap(markIds, committeeBoat, windMin, windMax) {
   });
 
   // OOB overlays, then course line offset by rounding and routed around OOB areas
-  drawObsPolygons(map);
+  drawObsPolygons(map, activeOOB());
   const coursePath = buildRoutedPath(roundingOffsetPositions(markIds));
   drawCourseRoute(map, coursePath, '#0d6efd');
 
-  // Committee boat — not on the course line
-  if (committeeBoat) {
-    L.marker([committeeBoat.lat, committeeBoat.lon], { icon: makeCBIcon() })
-      .addTo(map)
-      .bindPopup('<strong>Committee Boat</strong>');
-    markLatlngs.push([committeeBoat.lat, committeeBoat.lon]);
+  // Committee boat — auto-positioned perpendicular to M1→M2, 100 m from M1
+  if (includeCommitteeBoat && markIds.length >= 2) {
+    const cb = computeCbPosition(markIds);
+    if (cb) {
+      const m1 = resolveMark(markIds[0]);
+      L.polyline([[m1.lat, m1.lon], [cb.lat, cb.lon]], {
+        color: '#111', weight: 2, dashArray: '6 5', opacity: 0.75,
+      }).addTo(map);
+      L.marker([cb.lat, cb.lon], { icon: makeCBSquareIcon() })
+        .addTo(map)
+        .bindPopup('<strong>Committee Boat</strong>');
+      markLatlngs.push([cb.lat, cb.lon]);
+    }
   }
 
   if (coursePath.length > 1) {
@@ -1261,21 +1369,21 @@ function openCourseEditor(courseId, prePopulated = null) {
     `<option value="${st.id}" ${(course?.series_type_id === st.id || (!course && st.id === S.selectedStId)) ? 'selected' : ''}>${esc(st.name)}</option>`
   ).join('');
 
-  // Waypoint select
+  // Waypoint select — filtered to active collection(s) for this series
   const wpSel = document.getElementById('editorWpSelect');
-  const sorted = [...S.waypoints].sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+  const sorted = [...activeWaypoints()].sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
   wpSel.innerHTML = sorted.map(w =>
     `<option value="${w.id}">${esc(w.code)} — ${esc(w.name)}</option>`
   ).join('');
 
-  // Marks + committee boat — normalise legacy string marks to {wp, rounding} objects
+  // Marks + committee boat flag — normalise legacy string marks to {wp, rounding} objects
   S.editorMarks = (course?.marks || []).map(normaliseMark);
-  S.committeeBoat = course?.committee_boat || null;
+  S.includeCommitteeBoat = !!(course?.include_committee_boat);
   S.windBearingMin = normalizeBearingValue(course?.wind_bearing_min);
   S.windBearingMax = normalizeBearingValue(course?.wind_bearing_max);
   S.boatSpeed  = course?.boat_speed  ?? 5;
   S.beatFactor = course?.beat_factor ?? 0.7;
-  S.placingCB = false;
+  document.getElementById('cbIncludeCheck').checked = S.includeCommitteeBoat;
   document.getElementById('editorWindMin').value    = S.windBearingMin != null ? S.windBearingMin : '';
   document.getElementById('editorWindMax').value    = S.windBearingMax != null ? S.windBearingMax : '';
   document.getElementById('editorBoatSpeed').value  = S.boatSpeed;
@@ -1292,7 +1400,6 @@ function openCourseEditor(courseId, prePopulated = null) {
     document.getElementById('editorBeatFactor').value = Math.round(S.beatFactor * 100);
   }
   renderEditorMarkList();
-  renderCBStatus();
 
   const deleteBtn = document.getElementById('editorDeleteBtn');
   if (deleteBtn) {
@@ -1429,10 +1536,10 @@ function updateEditorMap() {
   });
 
   // Out-of-bounds overlays (redrawn after the clear; polygons are Polyline subclasses)
-  drawObsPolygons(S.editorMap);
+  drawObsPolygons(S.editorMap, activeOOB());
 
-  // Background: all listed waypoints (small, dim)
-  S.waypoints.forEach(wp => {
+  // Background: waypoints active for the current series (small, dim)
+  activeWaypoints().forEach(wp => {
     L.marker([wp.lat, wp.lon], { icon: makeWpDotIcon(wp) })
       .addTo(S.editorMap)
       .bindTooltip(`${wp.code} — ${wp.name}`, { direction: 'top', opacity: 0.85 });
@@ -1466,17 +1573,19 @@ function updateEditorMap() {
   if (markLatlngs.length > 1) S.editorMap.fitBounds(L.latLngBounds(markLatlngs).pad(0.15));
   else if (markLatlngs.length === 1) S.editorMap.setView(markLatlngs[0], 13);
 
-  // Committee boat — not part of the course line
-  if (S.committeeBoat) {
-    const cbMarker = L.marker([S.committeeBoat.lat, S.committeeBoat.lon], { icon: makeCBIcon(), draggable: true })
-      .addTo(S.editorMap)
-      .bindPopup('<strong>Committee Boat</strong><br><small>Drag to reposition</small>');
-    cbMarker.on('dragend', function(e) {
-      const { lat, lng } = e.target.getLatLng();
-      S.committeeBoat = { lat, lon: lng };
-      renderCBStatus();
-    });
-    if (!markLatlngs.length) S.editorMap.setView([S.committeeBoat.lat, S.committeeBoat.lon], 13);
+  // Committee boat — auto-positioned perpendicular to M1→M2, 100 m from M1
+  if (S.includeCommitteeBoat) {
+    const cb = computeCbPosition(S.editorMarks);
+    if (cb) {
+      const m1 = resolveMark(S.editorMarks[0]);
+      L.polyline([[m1.lat, m1.lon], [cb.lat, cb.lon]], {
+        color: '#111', weight: 2, dashArray: '6 5', opacity: 0.75,
+      }).addTo(S.editorMap);
+      L.marker([cb.lat, cb.lon], { icon: makeCBSquareIcon() })
+        .addTo(S.editorMap)
+        .bindPopup('<strong>Committee Boat</strong><br><small>Auto-positioned 100 m from mark 1</small>');
+      markLatlngs.push([cb.lat, cb.lon]);
+    }
   }
 
   addMapCompassOverlay(S.editorMap, S.windBearingMin, S.windBearingMax);
@@ -1506,7 +1615,7 @@ async function saveEditorCourse() {
     name,
     series_type_id: stId,
     marks: S.editorMarks,
-    committee_boat: S.committeeBoat,
+    include_committee_boat: S.includeCommitteeBoat,
     wind_bearing_min: S.windBearingMin,
     wind_bearing_max: S.windBearingMax,
     boat_speed:  parseFloat(document.getElementById('editorBoatSpeed').value)  || 5,
@@ -1537,7 +1646,7 @@ async function deleteCourseFromEditor() {
 // ── Auto-create course ─────────────────────────────────────────────────────
 
 function openAutoCreateModal() {
-  const sorted = [...S.waypoints].sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+  const sorted = [...activeWaypoints()].sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
   const sel = document.getElementById('acStartWp');
   sel.innerHTML = sorted.map(w =>
     `<option value="${w.id}" style="padding:3px 6px">${esc(w.code)} — ${esc(w.name)}</option>`
@@ -1594,7 +1703,7 @@ function generateAutoCourse() {
   const target = isDist ? distVal : timeVal;
   if (!target || target <= 0) { showErr(`Please enter a valid ${isDist ? 'distance' : 'time'} target.`); return; }
   if (!startWpId)             { showErr('Please select a starting waypoint.'); return; }
-  if (S.waypoints.length < 2) { showErr('Need at least 2 waypoints to build a course.'); return; }
+  if (activeWaypoints().length < 2) { showErr('Need at least 2 waypoints to build a course.'); return; }
 
   errorEl.classList.add('d-none');
 
@@ -1619,7 +1728,7 @@ function generateAutoCourse() {
   const sequence  = [startWpId];
   const used      = new Set([startWpId]);
   let accumulated = 0;
-  const MAX_MARKS = Math.min(S.waypoints.length * 2, 20);
+  const MAX_MARKS = Math.min(activeWaypoints().length * 2, 20);
 
   while ((accumulated < target * 0.90 || sequence.length < minMarks) && sequence.length < MAX_MARKS) {
     const currentWp = wpById(sequence[sequence.length - 1]);
@@ -1641,7 +1750,7 @@ function generateAutoCourse() {
     }
 
     let best = null, bestScore = -Infinity;
-    for (const wp of S.waypoints) {
+    for (const wp of activeWaypoints()) {
       if (wp.id === currentWp.id) continue;
 
       const contrib = legContrib(currentWp, wp);
@@ -1732,6 +1841,19 @@ function openSeriesTypeModal(stId) {
     if (st) delBtn.classList.remove('d-none');
     else delBtn.classList.add('d-none');
   }
+  const checksDiv = document.getElementById('stCollectionChecks');
+  if (checksDiv) {
+    if (!S.collections.length) {
+      checksDiv.innerHTML = '<p class="text-muted small mb-0">No collections defined yet. Add them via "Manage collections".</p>';
+    } else {
+      const currentIds = st?.collection_ids || [];
+      checksDiv.innerHTML = S.collections.map(c => `
+        <div class="form-check form-check-sm">
+          <input class="form-check-input" type="checkbox" id="stCol_${c.id}" value="${c.id}" ${currentIds.includes(c.id) ? 'checked' : ''}>
+          <label class="form-check-label small" for="stCol_${c.id}">${esc(c.name)}</label>
+        </div>`).join('');
+    }
+  }
   new bootstrap.Modal(document.getElementById('seriesTypeModal')).show();
 }
 
@@ -1739,10 +1861,13 @@ async function saveSeriesType() {
   const id   = document.getElementById('stModalId').value;
   const name = document.getElementById('stModalName').value.trim();
   if (!name) { alert('Please enter a name.'); return; }
+  const collectionIds = [...document.querySelectorAll('#stCollectionChecks input[type=checkbox]:checked')]
+    .map(cb => cb.value);
 
   const url    = id ? `/api/series_types/${id}` : '/api/series_types';
   const method = id ? 'PUT' : 'POST';
-  await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+  await fetch(url, { method, headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, collection_ids: collectionIds }) });
 
   bootstrap.Modal.getInstance(document.getElementById('seriesTypeModal')).hide();
   await loadData();
@@ -1769,14 +1894,7 @@ async function deleteSeriesType() {
   if (autoBtn2) autoBtn2.classList.add('d-none');
 }
 
-// ── Waypoints modal ────────────────────────────────────────────────────────
-function openWaypointsModal() {
-  renderWpTable();
-  const el = document.getElementById('waypointsModal');
-  el.addEventListener('shown.bs.modal',  () => initWpMap(),  { once: true });
-  el.addEventListener('hidden.bs.modal', () => { if (S.wpMap) { S.wpMap.remove(); S.wpMap = null; } }, { once: true });
-  new bootstrap.Modal(el).show();
-}
+// ── Waypoints (inside collections detail view) ─────────────────────────────
 
 function initWpMap() {
   if (S.wpMap) { S.wpMap.remove(); S.wpMap = null; }
@@ -1786,8 +1904,12 @@ function initWpMap() {
     attribution: '© OpenStreetMap contributors', maxZoom: 18,
   }).addTo(map);
 
+  const colWps = S.managingCollectionId
+    ? S.waypoints.filter(w => w.collection_id === S.managingCollectionId)
+    : S.waypoints;
+
   const latlngs = [];
-  S.waypoints.forEach(w => {
+  colWps.forEach(w => {
     const ll = [w.lat, w.lon];
     latlngs.push(ll);
     const marker = L.marker(ll, { icon: makeMarkIcon(getMarkType(w), w.code), draggable: loggedIn })
@@ -1795,11 +1917,8 @@ function initWpMap() {
       .bindTooltip(w.name, { permanent: false, direction: 'top' });
 
     if (loggedIn) {
-      // Stash original position so we can revert if user cancels
       let origLatLng = L.latLng(w.lat, w.lon);
-      marker.on('dragstart', function() {
-        origLatLng = this.getLatLng();
-      });
+      marker.on('dragstart', function() { origLatLng = this.getLatLng(); });
       marker.on('dragend', async function(e) {
         const newLL = e.target.getLatLng();
         const affected = S.courses.filter(c => (c.marks || []).some(m => m === w.id)).length;
@@ -1807,10 +1926,7 @@ function initWpMap() {
           + `  New: ${newLL.lat.toFixed(5)}°N  ${Math.abs(newLL.lng).toFixed(5)}°W\n`
           + `  Was: ${origLatLng.lat.toFixed(5)}°N  ${Math.abs(origLatLng.lng).toFixed(5)}°W\n`
           + (affected ? `\nAffects ${affected} course(s).` : '');
-        if (!confirm(msg)) {
-          e.target.setLatLng(origLatLng);
-          return;
-        }
+        if (!confirm(msg)) { e.target.setLatLng(origLatLng); return; }
         const updated = { ...w, lat: newLL.lat, lon: newLL.lng };
         await fetch(`/api/waypoints/${w.id}`, {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -1818,24 +1934,29 @@ function initWpMap() {
         });
         await loadData();
         renderWpTable();
-        origLatLng = newLL;  // update so a second drag uses the new position as baseline
-        // Refresh the marker's popup/tooltip name in case name changed
+        origLatLng = newLL;
         marker.setTooltipContent(w.name);
       });
     }
   });
 
-  // Show OOB overlays for context
   drawObsPolygons(map);
-
-  if (latlngs.length) map.fitBounds(L.latLngBounds(latlngs).pad(0.05));
+  if (latlngs.length) map.fitBounds(L.latLngBounds(latlngs).pad(0.1));
   else map.setView([50.87, -1.37], 12);
   map.invalidateSize();
 }
 
 function renderWpTable() {
-  const sorted = [...S.waypoints].sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+  const colWps = S.managingCollectionId
+    ? S.waypoints.filter(w => w.collection_id === S.managingCollectionId)
+    : S.waypoints;
+  const sorted = [...colWps].sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
   const body = document.getElementById('wpTableBody');
+  if (!body) return;
+  if (!sorted.length) {
+    body.innerHTML = `<tr><td colspan="${loggedIn ? 5 : 4}" class="text-muted text-center small py-2">No waypoints in this collection yet.</td></tr>`;
+    return;
+  }
   body.innerHTML = sorted.map(w => {
     const mt = markTypeDef(getMarkType(w));
     const typeCell = `${shapeSvg(mt.shape, mt.fill, mt.stroke, 20)}<small class="ms-1">${mt.label}</small>`;
@@ -1872,39 +1993,9 @@ function openWpEditor(wpId) {
 }
 
 // ── Committee boat ─────────────────────────────────────────────────────────
-function startPlacingCB() {
-  if (!S.editorMap) return;
-  S.placingCB = true;
-  document.getElementById('editorMap').style.cursor = 'crosshair';
-  document.getElementById('cbPlaceBtn').textContent = 'Click map to place…';
-  S.editorMap.once('click', function(e) {
-    S.committeeBoat = { lat: e.latlng.lat, lon: e.latlng.lng };
-    S.placingCB = false;
-    document.getElementById('editorMap').style.cursor = '';
-    renderCBStatus();
-    updateEditorMap();
-  });
-}
-
-function removeCB() {
-  S.committeeBoat = null;
-  S.placingCB = false;
-  document.getElementById('editorMap').style.cursor = '';
-  renderCBStatus();
+function toggleCB() {
+  S.includeCommitteeBoat = document.getElementById('cbIncludeCheck').checked;
   updateEditorMap();
-}
-
-function renderCBStatus() {
-  const placeBtn  = document.getElementById('cbPlaceBtn');
-  const removeBtn = document.getElementById('cbRemoveBtn');
-  if (!placeBtn) return;
-  if (S.committeeBoat) {
-    placeBtn.textContent = '⚓ Move CB';
-    removeBtn.classList.remove('d-none');
-  } else {
-    placeBtn.textContent = '⚓ Place committee boat';
-    removeBtn.classList.add('d-none');
-  }
 }
 
 // ── Mark type picker ───────────────────────────────────────────────────────
@@ -1983,9 +2074,10 @@ async function saveWaypoint() {
   const lat = parseFloat(document.getElementById('wpEditorLat').value);
   const lon = parseFloat(document.getElementById('wpEditorLon').value);
   const payload = {
-    code:  document.getElementById('wpEditorCode').value.trim(),
-    name:  document.getElementById('wpEditorName').value.trim(),
-    color: document.getElementById('wpEditorColor').value,
+    code:          document.getElementById('wpEditorCode').value.trim(),
+    name:          document.getElementById('wpEditorName').value.trim(),
+    color:         document.getElementById('wpEditorColor').value,
+    collection_id: S.managingCollectionId || '',
     lat, lon,
   };
   if (!payload.name || isNaN(lat) || isNaN(lon)) { alert('Name, latitude and longitude are required.'); return; }
@@ -2019,19 +2111,7 @@ async function deleteWaypoint() {
   renderWpTable();
 }
 
-// ── Out-of-bounds management ──────────────────────────────────────────────
-
-function openObsModal() {
-  renderObsTable();
-  const el = document.getElementById('obsModal');
-  el.addEventListener('shown.bs.modal',  () => initObMap(),  { once: true });
-  el.addEventListener('hidden.bs.modal', () => {
-    _cancelObDraw();
-    if (S.obMap) { S.obMap.remove(); S.obMap = null; }
-    S.obPolygonLayers = [];
-  }, { once: true });
-  new bootstrap.Modal(el).show();
-}
+// ── Out-of-bounds (inside collections detail view) ─────────────────────────
 
 function initObMap() {
   if (S.obMap) { S.obMap.remove(); S.obMap = null; }
@@ -2041,7 +2121,10 @@ function initObMap() {
     attribution: '© OpenStreetMap contributors', maxZoom: 18,
   }).addTo(map);
 
-  S.waypoints.forEach(wp => {
+  const colWps = S.managingCollectionId
+    ? S.waypoints.filter(w => w.collection_id === S.managingCollectionId)
+    : S.waypoints;
+  colWps.forEach(wp => {
     L.marker([wp.lat, wp.lon], { icon: makeWpDotIcon(wp) })
       .addTo(map)
       .bindTooltip(`${wp.code} — ${wp.name}`, { direction: 'top', opacity: 0.85 });
@@ -2049,18 +2132,20 @@ function initObMap() {
 
   _renderObsOnMap();
 
-  const pts = S.waypoints.map(w => [w.lat, w.lon]);
+  const pts = colWps.map(w => [w.lat, w.lon]);
   if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.05));
   else map.setView([50.87, -1.37], 12);
   map.invalidateSize();
 }
 
-// Redraw OOB polygons on the management map with click-to-highlight styling
 function _renderObsOnMap() {
   if (!S.obMap) return;
   S.obPolygonLayers.forEach(l => S.obMap.removeLayer(l));
   S.obPolygonLayers = [];
-  S.outOfBounds.forEach(ob => {
+  const colObs = S.managingCollectionId
+    ? S.outOfBounds.filter(o => o.collection_id === S.managingCollectionId)
+    : S.outOfBounds;
+  colObs.forEach(ob => {
     if (ob.coords.length < 3) return;
     const poly = L.polygon(ob.coords, {
       color: '#dc3545', weight: 2,
@@ -2074,11 +2159,14 @@ function _renderObsOnMap() {
 function renderObsTable() {
   const body = document.getElementById('obTableBody');
   if (!body) return;
-  if (!S.outOfBounds.length) {
-    body.innerHTML = `<tr><td colspan="3" class="text-muted text-center small ps-3 py-2">No areas defined yet.</td></tr>`;
+  const colObs = S.managingCollectionId
+    ? S.outOfBounds.filter(o => o.collection_id === S.managingCollectionId)
+    : S.outOfBounds;
+  if (!colObs.length) {
+    body.innerHTML = `<tr><td colspan="${loggedIn ? 3 : 2}" class="text-muted text-center small ps-3 py-2">No areas in this collection yet.</td></tr>`;
     return;
   }
-  body.innerHTML = S.outOfBounds.map(ob => {
+  body.innerHTML = colObs.map(ob => {
     const delBtn = loggedIn
       ? `<button class="btn btn-outline-danger btn-sm py-0 px-1" onclick="deleteObs('${ob.id}')">Delete</button>`
       : '';
@@ -2208,7 +2296,7 @@ async function _obSave() {
   const resp = await fetch('/api/out_of_bounds', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: name.trim() || 'Restricted area', coords: verts }),
+    body: JSON.stringify({ name: name.trim() || 'Restricted area', coords: verts, collection_id: S.managingCollectionId || '' }),
   });
   if (resp.ok) {
     const item = await resp.json();
@@ -2216,6 +2304,122 @@ async function _obSave() {
     _renderObsOnMap();
     renderObsTable();
   }
+}
+
+// ── Collections management ─────────────────────────────────────────────────
+
+function openCollectionsModal() {
+  showCollectionList();
+  const el = document.getElementById('collectionsModal');
+  el.addEventListener('hidden.bs.modal', () => {
+    // clean up maps when modal fully closes
+    if (S.wpMap) { S.wpMap.remove(); S.wpMap = null; }
+    if (S.obMap) { _cancelObDraw(); S.obMap.remove(); S.obMap = null; S.obPolygonLayers = []; }
+    S.managingCollectionId = null;
+  }, { once: true });
+  new bootstrap.Modal(el).show();
+}
+
+function showCollectionList() {
+  S.managingCollectionId = null;
+  if (S.wpMap) { S.wpMap.remove(); S.wpMap = null; }
+  if (S.obMap) { _cancelObDraw(); S.obMap.remove(); S.obMap = null; S.obPolygonLayers = []; }
+  document.getElementById('colListView').classList.remove('d-none');
+  document.getElementById('colDetailView').classList.add('d-none');
+  renderCollectionsTable();
+}
+
+function openCollectionDetail(colId) {
+  S.managingCollectionId = colId;
+  const col = S.collections.find(c => c.id === colId);
+  document.getElementById('colDetailName').textContent = col ? col.name : '';
+  document.getElementById('colListView').classList.add('d-none');
+  document.getElementById('colDetailView').classList.remove('d-none');
+  switchColTab('wps');
+}
+
+function switchColTab(tab) {
+  const wpTab      = document.getElementById('colWpTab');
+  const oobTab     = document.getElementById('colOobTab');
+  const wpContent  = document.getElementById('colWpContent');
+  const oobContent = document.getElementById('colOobContent');
+  if (tab === 'wps') {
+    wpTab.classList.add('active');
+    oobTab.classList.remove('active');
+    wpContent.classList.remove('d-none');
+    oobContent.classList.add('d-none');
+    if (S.obMap) { _cancelObDraw(); S.obMap.remove(); S.obMap = null; S.obPolygonLayers = []; }
+    renderWpTable();
+    setTimeout(() => initWpMap(), 50);
+  } else {
+    oobTab.classList.add('active');
+    wpTab.classList.remove('active');
+    oobContent.classList.remove('d-none');
+    wpContent.classList.add('d-none');
+    if (S.wpMap) { S.wpMap.remove(); S.wpMap = null; }
+    renderObsTable();
+    setTimeout(() => initObMap(), 50);
+  }
+}
+
+function renderCollectionsTable() {
+  const body = document.getElementById('collectionsTableBody');
+  if (!body) return;
+  if (!S.collections.length) {
+    body.innerHTML = `<tr><td colspan="4" class="text-muted text-center small ps-3 py-2">No collections yet — add one below.</td></tr>`;
+    return;
+  }
+  body.innerHTML = S.collections.map(col => {
+    const wpCount  = S.waypoints.filter(w => w.collection_id === col.id).length;
+    const obsCount = S.outOfBounds.filter(o => o.collection_id === col.id).length;
+    return `<tr>
+      <td class="ps-3">${esc(col.name)}</td>
+      <td class="text-muted small">${wpCount}</td>
+      <td class="text-muted small">${obsCount}</td>
+      <td><button class="btn btn-outline-primary btn-sm py-0 px-2" onclick="openCollectionDetail('${col.id}')">Manage ▶</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function addCollectionInline() {
+  const input = document.getElementById('newColName');
+  const name = input.value.trim();
+  if (!name) { input.focus(); return; }
+  await fetch('/api/collections', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  input.value = '';
+  await loadData();
+  renderCollectionsTable();
+}
+
+async function renameCurrentCollection() {
+  const col = S.collections.find(c => c.id === S.managingCollectionId);
+  if (!col) return;
+  const newName = prompt('Rename collection:', col.name);
+  if (!newName || newName.trim() === col.name) return;
+  await fetch(`/api/collections/${col.id}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: newName.trim() }),
+  });
+  await loadData();
+  document.getElementById('colDetailName').textContent = newName.trim();
+}
+
+async function deleteCurrentCollection() {
+  const id = S.managingCollectionId;
+  const col = S.collections.find(c => c.id === id);
+  if (!col) return;
+  const wpCount  = S.waypoints.filter(w => w.collection_id === id).length;
+  const obsCount = S.outOfBounds.filter(o => o.collection_id === id).length;
+  let msg = `Delete collection "${col.name}"?`;
+  if (wpCount || obsCount)
+    msg += `\n\n${wpCount} waypoint(s) and ${obsCount} OOB area(s) will become unassigned.`;
+  if (!confirm(msg)) return;
+  await fetch(`/api/collections/${id}`, { method: 'DELETE' });
+  await loadData();
+  showCollectionList();
 }
 
 // ── Import/Export ──────────────────────────────────────────────────────────

@@ -15,11 +15,12 @@ COURSES_DIR = os.environ.get(
 )
 os.makedirs(COURSES_DIR, exist_ok=True)
 
-WAYPOINTS_FILE   = os.path.join(COURSES_DIR, 'waypoints.json')
-SERIES_FILE      = os.path.join(COURSES_DIR, 'series_types.json')
-SERIES_DATA_FILE = os.path.join(COURSES_DIR, 'series.json')
-COURSES_FILE     = os.path.join(COURSES_DIR, 'courses.json')
-OBS_FILE         = os.path.join(COURSES_DIR, 'out_of_bounds.json')
+WAYPOINTS_FILE    = os.path.join(COURSES_DIR, 'waypoints.json')
+SERIES_FILE       = os.path.join(COURSES_DIR, 'series_types.json')
+SERIES_DATA_FILE  = os.path.join(COURSES_DIR, 'series.json')
+COURSES_FILE      = os.path.join(COURSES_DIR, 'courses.json')
+OBS_FILE          = os.path.join(COURSES_DIR, 'out_of_bounds.json')
+COLLECTIONS_FILE  = os.path.join(COURSES_DIR, 'collections.json')
 
 
 def _load(path, default=None):
@@ -38,6 +39,28 @@ def _save(path, data):
 
 def new_id():
     return str(int(time.time() * 1000))
+
+
+def _migrate_init_collections():
+    """One-time: if no collections exist, create 'Southampton Water' and assign all items to it."""
+    if _load(COLLECTIONS_FILE):
+        return
+    col = {'id': new_id(), 'name': 'Southampton Water'}
+    _save(COLLECTIONS_FILE, [col])
+    waypoints = _load(WAYPOINTS_FILE)
+    for wp in waypoints:
+        wp.setdefault('collection_id', col['id'])
+        if not wp['collection_id']:
+            wp['collection_id'] = col['id']
+    _save(WAYPOINTS_FILE, waypoints)
+    obs = _load(OBS_FILE)
+    for ob in obs:
+        ob.setdefault('collection_id', col['id'])
+        if not ob['collection_id']:
+            ob['collection_id'] = col['id']
+    _save(OBS_FILE, obs)
+
+_migrate_init_collections()
 
 
 def login_required(f):
@@ -79,6 +102,7 @@ def api_data():
         'series':         _load(SERIES_DATA_FILE),
         'courses':        _load(COURSES_FILE),
         'out_of_bounds':  _load(OBS_FILE),
+        'collections':    _load(COLLECTIONS_FILE),
     })
 
 
@@ -95,12 +119,14 @@ def create_waypoint():
     d = request.get_json() or {}
     waypoints = _load(WAYPOINTS_FILE)
     wp = {
-        'id':    new_id(),
-        'code':  d.get('code', '').strip(),
-        'name':  d.get('name', '').strip(),
-        'color': d.get('color', '').strip(),
-        'lat':   float(d['lat']),
-        'lon':   float(d['lon']),
+        'id':            new_id(),
+        'code':          d.get('code', '').strip(),
+        'name':          d.get('name', '').strip(),
+        'color':         d.get('color', '').strip(),
+        'mark_type':     d.get('mark_type', ''),
+        'collection_id': d.get('collection_id', ''),
+        'lat':           float(d['lat']),
+        'lon':           float(d['lon']),
     }
     waypoints.append(wp)
     _save(WAYPOINTS_FILE, waypoints)
@@ -114,11 +140,13 @@ def update_waypoint(wid):
     waypoints = _load(WAYPOINTS_FILE)
     for wp in waypoints:
         if wp['id'] == wid:
-            wp['code']  = d.get('code',  wp.get('code', '')).strip()
-            wp['name']  = d.get('name',  wp['name']).strip()
-            wp['color'] = d.get('color', wp.get('color', '')).strip()
-            wp['lat']   = float(d.get('lat', wp['lat']))
-            wp['lon']   = float(d.get('lon', wp['lon']))
+            wp['code']          = d.get('code',          wp.get('code', '')).strip()
+            wp['name']          = d.get('name',          wp['name']).strip()
+            wp['color']         = d.get('color',         wp.get('color', '')).strip()
+            wp['mark_type']     = d.get('mark_type',     wp.get('mark_type', ''))
+            wp['collection_id'] = d.get('collection_id', wp.get('collection_id', ''))
+            wp['lat']           = float(d.get('lat', wp['lat']))
+            wp['lon']           = float(d.get('lon', wp['lon']))
             _save(WAYPOINTS_FILE, waypoints)
             return jsonify(wp)
     return jsonify({'error': 'Not found'}), 404
@@ -132,6 +160,54 @@ def delete_waypoint(wid):
     return jsonify({'ok': True})
 
 
+# ── Collections ───────────────────────────────────────────────────────────────
+
+@app.route('/api/collections', methods=['POST'])
+@login_required
+def create_collection():
+    d = request.get_json() or {}
+    cols = _load(COLLECTIONS_FILE)
+    col = {'id': new_id(), 'name': d.get('name', '').strip()}
+    cols.append(col)
+    _save(COLLECTIONS_FILE, cols)
+    return jsonify(col), 201
+
+
+@app.route('/api/collections/<cid>', methods=['PUT'])
+@login_required
+def update_collection(cid):
+    d = request.get_json() or {}
+    cols = _load(COLLECTIONS_FILE)
+    for col in cols:
+        if col['id'] == cid:
+            col['name'] = d.get('name', col['name']).strip()
+            _save(COLLECTIONS_FILE, cols)
+            return jsonify(col)
+    return jsonify({'error': 'Not found'}), 404
+
+
+@app.route('/api/collections/<cid>', methods=['DELETE'])
+@login_required
+def delete_collection(cid):
+    _save(COLLECTIONS_FILE, [c for c in _load(COLLECTIONS_FILE) if c['id'] != cid])
+    waypoints = _load(WAYPOINTS_FILE)
+    for wp in waypoints:
+        if wp.get('collection_id') == cid:
+            wp['collection_id'] = ''
+    _save(WAYPOINTS_FILE, waypoints)
+    obs = _load(OBS_FILE)
+    for o in obs:
+        if o.get('collection_id') == cid:
+            o['collection_id'] = ''
+    _save(OBS_FILE, obs)
+    series = _load(SERIES_FILE)
+    for st in series:
+        if cid in st.get('collection_ids', []):
+            st['collection_ids'] = [x for x in st['collection_ids'] if x != cid]
+    _save(SERIES_FILE, series)
+    return jsonify({'ok': True})
+
+
 # ── Series types ──────────────────────────────────────────────────────────────
 
 @app.route('/api/series_types', methods=['POST'])
@@ -139,7 +215,7 @@ def delete_waypoint(wid):
 def create_series_type():
     d = request.get_json() or {}
     series = _load(SERIES_FILE)
-    st = {'id': new_id(), 'name': d.get('name', '').strip()}
+    st = {'id': new_id(), 'name': d.get('name', '').strip(), 'collection_ids': d.get('collection_ids', [])}
     series.append(st)
     _save(SERIES_FILE, series)
     return jsonify(st), 201
@@ -152,7 +228,8 @@ def update_series_type(stid):
     series = _load(SERIES_FILE)
     for st in series:
         if st['id'] == stid:
-            st['name'] = d.get('name', st['name']).strip()
+            st['name']           = d.get('name', st['name']).strip()
+            st['collection_ids'] = d.get('collection_ids', st.get('collection_ids', []))
             _save(SERIES_FILE, series)
             return jsonify(st)
     return jsonify({'error': 'Not found'}), 404
@@ -221,7 +298,7 @@ def create_course():
         'name':           d.get('name', '').strip(),
         'series_type_id': d.get('series_type_id', ''),
         'marks':          d.get('marks', []),
-        'committee_boat': d.get('committee_boat', None),
+        'include_committee_boat': d.get('include_committee_boat', False),
         'wind_bearing_min': d.get('wind_bearing_min', None),
         'wind_bearing_max': d.get('wind_bearing_max', None),
         'boat_speed':  d.get('boat_speed', 5),
@@ -242,7 +319,7 @@ def update_course(cid):
             course['name']           = d.get('name',           course['name']).strip()
             course['series_type_id'] = d.get('series_type_id', course['series_type_id'])
             course['marks']          = d.get('marks',          course['marks'])
-            course['committee_boat'] = d.get('committee_boat', course.get('committee_boat'))
+            course['include_committee_boat'] = d.get('include_committee_boat', course.get('include_committee_boat', False))
             course['wind_bearing_min'] = d.get('wind_bearing_min', course.get('wind_bearing_min'))
             course['wind_bearing_max'] = d.get('wind_bearing_max', course.get('wind_bearing_max'))
             course['boat_speed']  = d.get('boat_speed',  course.get('boat_speed',  5))
@@ -268,9 +345,10 @@ def create_obs():
     d = request.get_json() or {}
     obs = _load(OBS_FILE)
     item = {
-        'id':     new_id(),
-        'name':   d.get('name', 'Restricted area').strip(),
-        'coords': d.get('coords', []),  # [[lat, lon], ...]
+        'id':            new_id(),
+        'name':          d.get('name', 'Restricted area').strip(),
+        'coords':        d.get('coords', []),
+        'collection_id': d.get('collection_id', ''),
     }
     obs.append(item)
     _save(OBS_FILE, obs)
@@ -284,8 +362,9 @@ def update_obs(oid):
     obs = _load(OBS_FILE)
     for item in obs:
         if item['id'] == oid:
-            item['name']   = d.get('name',   item['name']).strip()
-            item['coords'] = d.get('coords', item['coords'])
+            item['name']          = d.get('name',          item['name']).strip()
+            item['coords']        = d.get('coords',        item['coords'])
+            item['collection_id'] = d.get('collection_id', item.get('collection_id', ''))
             _save(OBS_FILE, obs)
             return jsonify(item)
     return jsonify({'error': 'Not found'}), 404
