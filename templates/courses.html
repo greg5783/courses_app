@@ -25,7 +25,7 @@
     .mark-row { display: flex; align-items: center; padding: 5px 0; border-bottom: 1px solid #f0f0f0; }
     .mark-row:last-child { border-bottom: none; }
     .leaflet-map { border-radius: 8px; }
-    #viewMap, #editorMap { height: 420px; border-radius: 8px; }
+    #viewMap, #editorMap, #editorMapMulti { height: 420px; border-radius: 8px; }
     .map-compass-overlay {
       position: absolute;
       top: 12px;
@@ -49,6 +49,17 @@
       display: inline-block; width: 14px; height: 14px; border-radius: 3px;
       border: 1px solid #aaa; vertical-align: middle; margin-right: 4px;
     }
+    /* Racing class pennant flags (International Code of Signals numeral pennants) */
+    .fleet-pennant {
+      display: inline-block; width: 30px; height: 19px;
+      clip-path: polygon(0 0, 100% 50%, 0 100%);
+      vertical-align: middle; margin-right: 5px; flex-shrink: 0;
+    }
+    .fleet-pennant-sm {
+      width: 22px; height: 14px;
+    }
+    .fleet-pennant-1 { background: radial-gradient(circle at 38% 50%, #C8102E 28%, #FFFFFF 28%); }
+    .fleet-pennant-2 { background: radial-gradient(circle at 38% 50%, #FFFFFF 28%, #003DA5 28%); }
   </style>
 </head>
 <body>
@@ -167,8 +178,9 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
+        <!-- Row 1: Name / Series / Wind / Multi-class toggle -->
         <div class="row g-3 mb-3">
-          <div class="col-md-6">
+          <div class="col-md-5">
             <label class="form-label fw-semibold">Course name</label>
             <input type="text" class="form-control" id="editorName" placeholder="e.g. Olympic Triangle">
           </div>
@@ -197,9 +209,16 @@
             </div>
             <div class="form-text">Direction wind comes from (0 = N, 90 = E).</div>
           </div>
+          <div class="col-md-1 d-flex align-items-end pb-1">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="editorMultiClass" onchange="setMultiClass(this.checked)">
+              <label class="form-check-label small" for="editorMultiClass">Multi-class</label>
+            </div>
+          </div>
         </div>
 
-        <div class="row g-2 mb-3">
+        <!-- Row 2: Boat speed (single-class only) -->
+        <div class="row g-2 mb-3" id="singleBoatSpeedRow">
           <div class="col-md-3">
             <label class="form-label fw-semibold">Boat speed</label>
             <div class="input-group">
@@ -209,45 +228,135 @@
           </div>
         </div>
 
-        <div class="row g-3">
-          <div class="col-lg-5">
-            <label class="form-label fw-semibold">Add mark</label>
-            <div class="input-group mb-1">
-              <select class="form-select" id="editorWpSelect"></select>
-              <button class="btn btn-outline-primary" onclick="editorAddMark()">Add</button>
+        <!-- Single-class section (existing) -->
+        <div id="singleClassSection">
+          <div class="row g-3">
+            <div class="col-lg-5">
+              <label class="form-label fw-semibold">Add mark</label>
+              <div class="input-group mb-1">
+                <select class="form-select" id="editorWpSelect"></select>
+                <button class="btn btn-outline-primary" onclick="editorAddMark()">Add</button>
+              </div>
+              <div class="mb-2">
+                <button class="btn btn-outline-secondary btn-sm w-100" onclick="addCustomMark()"
+                        title="Add a free-position mark not from the waypoints list">+ Custom mark</button>
+              </div>
+              <div id="editorMarkList" class="border rounded p-2" style="min-height:120px;">
+                <p class="text-muted small mb-0" id="editorNoMarks">No marks yet.</p>
+              </div>
+              <div class="mt-2">
+                <label class="form-label fw-semibold small mb-1">Start</label>
+                <div class="d-flex flex-column gap-1">
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="startType" id="startNone" value="none" checked onchange="setStartType('none')">
+                    <label class="form-check-label" for="startNone">Neither</label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="startType" id="startCB" value="cb" onchange="setStartType('cb')">
+                    <label class="form-check-label" for="startCB">Committee boat</label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="radio" name="startType" id="startBalcony" value="balcony" onchange="setStartType('balcony')">
+                    <label class="form-check-label" for="startBalcony">Balcony</label>
+                  </div>
+                </div>
+                <div id="balconyWpRow" class="mt-1 d-none">
+                  <select class="form-select form-select-sm" id="balconyWpSelect" onchange="setBalconyWp(this.value)"></select>
+                </div>
+              </div>
             </div>
-            <div class="mb-2">
-              <button class="btn btn-outline-secondary btn-sm w-100" onclick="addCustomMark()"
-                      title="Add a free-position mark not from the waypoints list">+ Custom mark</button>
+            <div class="col-lg-7">
+              <label class="form-label fw-semibold">Preview</label>
+              <div id="editorMap" class="leaflet-map"></div>
+              <p class="text-muted mt-1 mb-0" style="font-size:11px">💡 Drag any mark to update its position</p>
             </div>
-            <div id="editorMarkList" class="border rounded p-2" style="min-height:120px;">
-              <p class="text-muted small mb-0" id="editorNoMarks">No marks yet.</p>
-            </div>
-            <div class="mt-2">
+          </div>
+        </div>
+
+        <!-- Multi-class section (shown when multi-class toggled on) -->
+        <div id="multiClassSection" class="d-none">
+          <div class="row g-3">
+            <!-- Class 1 panel -->
+            <div class="col-lg-3">
+              <div class="d-flex align-items-center mb-2">
+                <span class="fleet-pennant fleet-pennant-1"></span>
+                <svg width="24" height="8" style="vertical-align:middle;margin-right:5px"><line x1="1" y1="4" x2="23" y2="4" stroke="#C8102E" stroke-width="2.5" stroke-dasharray="5 3"/></svg>
+                <span class="fw-semibold">Class 1</span>
+              </div>
+              <div class="input-group mb-1">
+                <select class="form-select" id="class1WpSelect"></select>
+                <button class="btn btn-outline-primary" onclick="classAddMark(0)">Add</button>
+              </div>
+              <div id="class1MarkList" class="border rounded p-2 mb-2" style="min-height:100px;">
+                <p class="text-muted small mb-0">No marks yet.</p>
+              </div>
+              <div class="input-group input-group-sm mb-2">
+                <span class="input-group-text">Speed</span>
+                <input id="class1BoatSpeed" type="number" class="form-control" min="0.5" max="30" step="0.5" placeholder="5">
+                <span class="input-group-text">kts</span>
+              </div>
               <label class="form-label fw-semibold small mb-1">Start</label>
               <div class="d-flex flex-column gap-1">
                 <div class="form-check">
-                  <input class="form-check-input" type="radio" name="startType" id="startNone" value="none" checked onchange="setStartType('none')">
-                  <label class="form-check-label" for="startNone">Neither</label>
+                  <input class="form-check-input" type="radio" name="class1StartType" id="class1StartNone" value="none" checked onchange="setClassStartType(0,'none')">
+                  <label class="form-check-label small" for="class1StartNone">Neither</label>
                 </div>
                 <div class="form-check">
-                  <input class="form-check-input" type="radio" name="startType" id="startCB" value="cb" onchange="setStartType('cb')">
-                  <label class="form-check-label" for="startCB">Committee boat</label>
+                  <input class="form-check-input" type="radio" name="class1StartType" id="class1StartCB" value="cb" onchange="setClassStartType(0,'cb')">
+                  <label class="form-check-label small" for="class1StartCB">Committee boat</label>
                 </div>
                 <div class="form-check">
-                  <input class="form-check-input" type="radio" name="startType" id="startBalcony" value="balcony" onchange="setStartType('balcony')">
-                  <label class="form-check-label" for="startBalcony">Balcony</label>
+                  <input class="form-check-input" type="radio" name="class1StartType" id="class1StartBalcony" value="balcony" onchange="setClassStartType(0,'balcony')">
+                  <label class="form-check-label small" for="class1StartBalcony">Balcony</label>
                 </div>
               </div>
-              <div id="balconyWpRow" class="mt-1 d-none">
-                <select class="form-select form-select-sm" id="balconyWpSelect" onchange="setBalconyWp(this.value)"></select>
+              <div id="class1BalconyRow" class="mt-1 d-none">
+                <select class="form-select form-select-sm" id="class1BalconySelect" onchange="setClassBalconyWp(0,this.value)"></select>
               </div>
             </div>
-          </div>
-          <div class="col-lg-7">
-            <label class="form-label fw-semibold">Preview</label>
-            <div id="editorMap" class="leaflet-map"></div>
-            <p class="text-muted mt-1 mb-0" style="font-size:11px">💡 Drag any mark to update its position</p>
+            <!-- Class 2 panel -->
+            <div class="col-lg-3">
+              <div class="d-flex align-items-center mb-2">
+                <span class="fleet-pennant fleet-pennant-2"></span>
+                <svg width="24" height="8" style="vertical-align:middle;margin-right:5px"><line x1="1" y1="4" x2="23" y2="4" stroke="#003DA5" stroke-width="2.5" stroke-dasharray="5 3"/></svg>
+                <span class="fw-semibold">Class 2</span>
+              </div>
+              <div class="input-group mb-1">
+                <select class="form-select" id="class2WpSelect"></select>
+                <button class="btn btn-outline-primary" onclick="classAddMark(1)">Add</button>
+              </div>
+              <div id="class2MarkList" class="border rounded p-2 mb-2" style="min-height:100px;">
+                <p class="text-muted small mb-0">No marks yet.</p>
+              </div>
+              <div class="input-group input-group-sm mb-2">
+                <span class="input-group-text">Speed</span>
+                <input id="class2BoatSpeed" type="number" class="form-control" min="0.5" max="30" step="0.5" placeholder="5">
+                <span class="input-group-text">kts</span>
+              </div>
+              <label class="form-label fw-semibold small mb-1">Start</label>
+              <div class="d-flex flex-column gap-1">
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="class2StartType" id="class2StartNone" value="none" checked onchange="setClassStartType(1,'none')">
+                  <label class="form-check-label small" for="class2StartNone">Neither</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="class2StartType" id="class2StartCB" value="cb" onchange="setClassStartType(1,'cb')">
+                  <label class="form-check-label small" for="class2StartCB">Committee boat</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="class2StartType" id="class2StartBalcony" value="balcony" onchange="setClassStartType(1,'balcony')">
+                  <label class="form-check-label small" for="class2StartBalcony">Balcony</label>
+                </div>
+              </div>
+              <div id="class2BalconyRow" class="mt-1 d-none">
+                <select class="form-select form-select-sm" id="class2BalconySelect" onchange="setClassBalconyWp(1,this.value)"></select>
+              </div>
+            </div>
+            <!-- Preview map alongside the class panels -->
+            <div class="col-lg-6">
+              <label class="form-label fw-semibold">Preview</label>
+              <div id="editorMapMulti" class="leaflet-map"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -704,8 +813,14 @@ const S = {
   windSingleMode: true,
   boatSpeed: 5,
   beatFactor: 0.7,
+  multiClass: false,
+  editorClasses: [
+    { name: 'Class 1', marks: [], startType: 'none', balconyWpId: null, boatSpeed: 5 },
+    { name: 'Class 2', marks: [], startType: 'none', balconyWpId: null, boatSpeed: 5 },
+  ],
   viewMap: null,
   editorMap: null,
+  editorMapMulti: null,
   wpMap: null,
   obMap: null,           // Leaflet map inside OOB management modal
   obPolygonLayers: [],   // polygon layers currently on obMap
@@ -1354,8 +1469,57 @@ function renderCourses(stId) {
   body.innerHTML = `<div class="row g-3">${courses.map(c => courseCard(c)).join('')}</div>`;
 }
 
+function _classMarkList(marks) {
+  return marks.map((mark, i) => {
+    const wp  = resolveMark(mark);
+    const col = wp?.color || '';
+    const name = wp ? `${wp.code} ${wp.name}` : (mark?.wp || String(mark));
+    const rnd = markRounding(mark);
+    return `<li class="small py-1"><span class="mark-badge" style="background:${markColor(col)};color:${(col==='Y'||col==='YB')?'#333':'#fff'};font-size:10px">${i+1}</span>${esc(name)}<span class="ms-1 text-muted" style="font-size:9px">${rnd}</span></li>`;
+  }).join('');
+}
+
 function courseCard(c) {
-  const marks = c.marks || [];
+  const _wn = normalizeBearingValue(c.wind_bearing_min), _wx = normalizeBearingValue(c.wind_bearing_max);
+  const _desc = windDescription(_wn, _wx);
+  const _svg  = windCardSvg(_wn, _wx);
+  const _windRow = (_desc && _svg)
+    ? `<div class="d-flex align-items-center gap-2 mb-2">${_svg}<span class="small text-muted">${_desc}</span></div>`
+    : '';
+
+  if (c.multi_class && c.classes?.length) {
+    // Multi-class card — wider, side-by-side class columns
+    const classHtml = c.classes.map((cl, ci) => {
+      const clColor = ['#C8102E','#003DA5'][ci] || '#6c757d';
+      const pennant = ci < 2 ? `<span class="fleet-pennant fleet-pennant-sm fleet-pennant-${ci + 1}"></span><svg width="20" height="8" style="vertical-align:middle;margin-right:3px"><line x1="1" y1="4" x2="19" y2="4" stroke="${clColor}" stroke-width="2.5" stroke-dasharray="5 3"/></svg>` : '';
+      const clMarks = (cl.marks || []).map(normaliseMark);
+      const dist = clMarks.length >= 2 ? courseDist(clMarks).toFixed(2) : null;
+      const eta  = clMarks.length >= 2 ? formatETA(courseETA(clMarks, _wn, _wx, cl.boat_speed ?? 5, 0.7)) : null;
+      const meta = dist ? `<span class="text-muted" style="font-size:10px">${clMarks.length} marks &middot; ${dist} nm &middot; ~${eta}</span>` : `<span class="text-muted" style="font-size:10px">${clMarks.length} mark${clMarks.length !== 1 ? 's' : ''}</span>`;
+      return `<div class="col-6">
+        <div class="d-flex align-items-center gap-1 mb-1">${pennant}<span class="fw-semibold small">${esc(cl.name)}</span></div>
+        ${meta}
+        <ul class="list-unstyled mb-0">${_classMarkList(clMarks)}</ul>
+      </div>`;
+    }).join('');
+
+    return `<div class="col-md-12 col-xl-6">
+      <div class="card course-card h-100" onclick="openViewModal('${c.id}')">
+        <div class="card-body">
+          <h6 class="card-title fw-semibold mb-1">${esc(c.name)}</h6>
+          ${_windRow}
+          <div class="row g-2">${classHtml}</div>
+        </div>
+        <div class="card-footer bg-transparent py-2 d-flex justify-content-end gap-2">
+          <button class="btn btn-outline-secondary btn-sm" onclick="event.stopPropagation();openViewModal('${c.id}')">View map</button>
+          ${loggedIn ? `<button class="btn btn-outline-primary btn-sm" onclick="event.stopPropagation();openCourseEditor('${c.id}')">Edit</button>` : ''}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // Single-class card (unchanged)
+  const marks = (c.marks || []).map(normaliseMark);
   const markNames = marks.map((mark, i) => {
     const wp  = resolveMark(mark);
     const col = wp?.color || '';
@@ -1365,13 +1529,6 @@ function courseCard(c) {
     const rnd = markRounding(mark);
     return `<span class="mark-badge" style="background:${markColor(col)};color:${(col==='Y'||col==='YB')?'#333':'#fff'};font-size:10px">${i+1}</span>${esc(name)}<span class="ms-1 text-muted" style="font-size:9px">${rnd}</span>`;
   }).map(h => `<li class="small py-1">${h}</li>`).join('');
-
-  const _wn = normalizeBearingValue(c.wind_bearing_min), _wx = normalizeBearingValue(c.wind_bearing_max);
-  const _desc = windDescription(_wn, _wx);
-  const _svg  = windCardSvg(_wn, _wx);
-  const _windRow = (_desc && _svg)
-    ? `<div class="d-flex align-items-center gap-2 mb-2">${_svg}<span class="small text-muted">${_desc}</span></div>`
-    : '';
 
   return `<div class="col-md-6 col-xl-4">
     <div class="card course-card h-100" onclick="openViewModal('${c.id}')">
@@ -1407,46 +1564,7 @@ function openViewModal(courseId) {
   const shareBtn = document.getElementById('viewShareBtn');
   if (shareBtn) shareBtn.classList.toggle('d-none', !navigator.share);
 
-  // Build mark list
-  const marks = course.marks || [];
-  const markHtml = marks.length
-    ? marks.map((mark, i) => {
-        const wp = resolveMark(mark);
-        if (!wp) return '';
-        const custom = isCustom(mark);
-        const bg = markColor(wp.color || '');
-        const fg = (wp.color === 'Y' || wp.color === 'YB') ? '#333' : '#fff';
-        const label = custom
-          ? `<span class="fw-semibold">${esc(mark.name || 'Custom mark')}</span>`
-          : `<span class="fw-semibold me-1">${esc(wp.code)}</span><span>${esc(wp.name)}</span>`;
-        const badge = (!custom && wp.color)
-          ? `<span class="ms-2 badge" style="background:${bg};color:${fg}">${esc(wp.color)}</span>` : '';
-        const markRowHtml = `<div class="mark-row">
-          <span class="mark-badge" style="background:${bg};color:${fg}">${i + 1}</span>
-          ${label}${badge}
-        </div>`;
-        const nextWp = i < marks.length - 1 ? resolveMark(marks[i + 1]) : null;
-        const legHtml = (wp && nextWp)
-          ? legIndicatorHTML(wp, nextWp, course.wind_bearing_min, course.wind_bearing_max)
-          : '';
-        return markRowHtml + legHtml;
-      }).join('')
-    : '<p class="text-muted">No marks defined.</p>';
-  let listHtml = markHtml;
-  const _st = course.start_type ?? (course.include_committee_boat ? 'cb' : 'none');
-  if (_st === 'cb') {
-    listHtml += `<div class="mark-row mt-2 pt-2" style="border-top:2px solid #333">
-      <span class="mark-badge" style="background:#111;color:#fff;border-radius:2px">CB</span>
-      <span class="fw-semibold">Committee Boat</span>
-      <span class="ms-2 text-muted small">auto-positioned 100 m from mark 1</span>
-    </div>`;
-  } else if (_st === 'balcony') {
-    const bwp = wpById(course.balcony_wp_id);
-    listHtml += `<div class="mark-row mt-2 pt-2" style="border-top:2px solid #333">
-      <span class="mark-badge" style="background:#111;color:#fff;border-radius:2px">B</span>
-      <span class="fw-semibold">Balcony${bwp ? ` — ${esc(bwp.code)} ${esc(bwp.name)}` : ''}</span>
-    </div>`;
-  }
+  const _wn = normalizeBearingValue(course.wind_bearing_min), _wx = normalizeBearingValue(course.wind_bearing_max);
   const windInfo = Number.isFinite(course.wind_bearing_min) && Number.isFinite(course.wind_bearing_max)
     ? `<div class="mark-row mt-2 pt-2" style="border-top:2px solid #0d6efd">
          <span class="mark-badge" style="background:#0dcaf0;color:#000;border-radius:4px">W</span>
@@ -1454,22 +1572,89 @@ function openViewModal(courseId) {
          <span class="ms-2 text-muted small">${formatBearing(course.wind_bearing_min)}° – ${formatBearing(course.wind_bearing_max)}°</span>
        </div>`
     : '';
-  const _bs = course.boat_speed ?? 5, _bf = course.beat_factor ?? 0.7;
-  const _wn = normalizeBearingValue(course.wind_bearing_min), _wx = normalizeBearingValue(course.wind_bearing_max);
-  const distRow = marks.length >= 2
-    ? `<div class="mark-row mt-2 pt-2" style="border-top:2px solid #198754">
-         <span class="mark-badge" style="background:#198754;color:#fff;border-radius:4px">nm</span>
-         <span class="fw-semibold">Total distance</span>
-         <span class="ms-2 text-muted small">${courseDist(marks).toFixed(2)} nm &middot; ~${formatETA(courseETA(marks, _wn, _wx, _bs, _bf))} at ${_bs} kts</span>
-       </div>`
-    : '';
-  document.getElementById('viewMarkList').innerHTML = listHtml + windInfo + distRow;
+
+  function _buildMarkHtml(marks, startType, balconyWpId, boatSpeed) {
+    const _bs = boatSpeed ?? 5, _bf = course.beat_factor ?? 0.7;
+    let html = marks.length
+      ? marks.map((mark, i) => {
+          const wp = resolveMark(mark);
+          if (!wp) return '';
+          const custom = isCustom(mark);
+          const bg = markColor(wp.color || '');
+          const fg = (wp.color === 'Y' || wp.color === 'YB') ? '#333' : '#fff';
+          const label = custom
+            ? `<span class="fw-semibold">${esc(mark.name || 'Custom mark')}</span>`
+            : `<span class="fw-semibold me-1">${esc(wp.code)}</span><span>${esc(wp.name)}</span>`;
+          const badge = (!custom && wp.color)
+            ? `<span class="ms-2 badge" style="background:${bg};color:${fg}">${esc(wp.color)}</span>` : '';
+          const markRowHtml = `<div class="mark-row">
+            <span class="mark-badge" style="background:${bg};color:${fg}">${i + 1}</span>
+            ${label}${badge}
+          </div>`;
+          const nextWp = i < marks.length - 1 ? resolveMark(marks[i + 1]) : null;
+          const legHtml = (wp && nextWp)
+            ? legIndicatorHTML(wp, nextWp, course.wind_bearing_min, course.wind_bearing_max)
+            : '';
+          return markRowHtml + legHtml;
+        }).join('')
+      : '<p class="text-muted">No marks defined.</p>';
+    const _st = startType ?? 'none';
+    if (_st === 'cb') {
+      html += `<div class="mark-row mt-2 pt-2" style="border-top:2px solid #333">
+        <span class="mark-badge" style="background:#111;color:#fff;border-radius:2px">CB</span>
+        <span class="fw-semibold">Committee Boat</span>
+        <span class="ms-2 text-muted small">auto-positioned 100 m from mark 1</span>
+      </div>`;
+    } else if (_st === 'balcony') {
+      const bwp = wpById(balconyWpId);
+      html += `<div class="mark-row mt-2 pt-2" style="border-top:2px solid #333">
+        <span class="mark-badge" style="background:#111;color:#fff;border-radius:2px">B</span>
+        <span class="fw-semibold">Balcony${bwp ? ` — ${esc(bwp.code)} ${esc(bwp.name)}` : ''}</span>
+      </div>`;
+    }
+    if (marks.length >= 2) {
+      html += `<div class="mark-row mt-2 pt-2" style="border-top:2px solid #198754">
+        <span class="mark-badge" style="background:#198754;color:#fff;border-radius:4px">nm</span>
+        <span class="fw-semibold">Distance</span>
+        <span class="ms-2 text-muted small">${courseDist(marks).toFixed(2)} nm &middot; ~${formatETA(courseETA(marks, _wn, _wx, _bs, _bf))} at ${_bs} kts</span>
+      </div>`;
+    }
+    return html;
+  }
+
+  let listHtml;
+  if (course.multi_class && course.classes?.length) {
+    const CLASS_COLORS = ['#C8102E', '#003DA5'];
+    const cols = course.classes.map((cl, ci) => {
+      const pennant = ci < 2 ? `<span class="fleet-pennant fleet-pennant-${ci + 1}" style="margin-bottom:2px"></span><svg width="24" height="8" style="vertical-align:middle;margin-right:5px"><line x1="1" y1="4" x2="23" y2="4" stroke="${CLASS_COLORS[ci]}" stroke-width="2.5" stroke-dasharray="5 3"/></svg>` : '';
+      const clMarks = (cl.marks || []).map(normaliseMark);
+      const clHtml = _buildMarkHtml(clMarks, cl.start_type, cl.balcony_wp_id, cl.boat_speed);
+      const borderColor = CLASS_COLORS[ci] || '#6c757d';
+      return `<div class="col-6" style="border-left: 3px solid ${borderColor}; padding-left: 10px">
+        <div class="d-flex align-items-center mb-2">${pennant}<span class="fw-semibold">${esc(cl.name)}</span></div>
+        ${clHtml}
+      </div>`;
+    }).join('');
+    listHtml = `<div class="row g-3">${cols}</div>`;
+  } else {
+    const marks = (course.marks || []).map(normaliseMark);
+    const _st = course.start_type ?? (course.include_committee_boat ? 'cb' : 'none');
+    listHtml = _buildMarkHtml(marks, _st, course.balcony_wp_id, course.boat_speed);
+  }
+
+  document.getElementById('viewMarkList').innerHTML = listHtml + windInfo;
 
   const modal = new bootstrap.Modal(document.getElementById('viewModal'));
   modal.show();
 
   document.getElementById('viewModal').addEventListener('shown.bs.modal', () => {
-    initViewMap(marks, _st, course.balcony_wp_id || null, course.wind_bearing_min, course.wind_bearing_max);
+    if (course.multi_class && course.classes?.length) {
+      initViewMapMultiClass(course);
+    } else {
+      const marks = (course.marks || []).map(normaliseMark);
+      const _st = course.start_type ?? (course.include_committee_boat ? 'cb' : 'none');
+      initViewMap(marks, _st, course.balcony_wp_id || null, course.wind_bearing_min, course.wind_bearing_max);
+    }
   }, { once: true });
 }
 
@@ -1524,6 +1709,64 @@ function initViewMap(markIds, startType, balconyWpId, windMin, windMax) {
     map.setView([50.87, -1.37], 12);
   }
   addMapCompassOverlay(map, normalizeBearingValue(windMin), normalizeBearingValue(windMax));
+  map.invalidateSize();
+}
+
+function initViewMapMultiClass(course) {
+  if (S.viewMap) { S.viewMap.remove(); S.viewMap = null; }
+  const map = L.map('viewMap');
+  S.viewMap = map;
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors', maxZoom: 18,
+  }).addTo(map);
+
+  allActiveWaypoints().forEach(wp => {
+    const icon = wp.kind === 'balcony' ? makeBalconyWpDotIcon() : makeWpDotIcon(wp);
+    L.marker([wp.lat, wp.lon], { icon })
+      .addTo(map)
+      .bindTooltip(`${wp.code} — ${wp.name}${wp.kind === 'balcony' ? ' (Balcony)' : ''}`, { direction: 'top', opacity: 0.85 });
+  });
+
+  drawObsPolygons(map, activeOOB());
+
+  const CLASS_COLORS = ['#C8102E', '#003DA5'];
+  const allLatlngs = [];
+
+  (course.classes || []).forEach((cl, ci) => {
+    const color = CLASS_COLORS[ci] || '#6c757d';
+    const clMarks = (cl.marks || []).map(normaliseMark);
+    const markLatlngs = [];
+    clMarks.forEach((mark, i) => {
+      const wp = resolveMark(mark);
+      if (!wp) return;
+      const ll = [wp.lat, wp.lon];
+      markLatlngs.push(ll);
+      allLatlngs.push(ll);
+      const rounding = markRounding(mark);
+      const roundLabel = rounding === 'S' ? 'Leave to starboard' : 'Leave to port';
+      L.marker(ll, { icon: makeMarkIcon(getMarkType(wp), i + 1) })
+        .addTo(map)
+        .bindPopup(`<strong>${esc(wp.code)} — ${esc(wp.name)}</strong><br>${cl.name} &middot; Mark ${i + 1} &middot; ${roundLabel}`);
+    });
+    drawStartMarker(map, clMarks, markLatlngs, cl.start_type, cl.balcony_wp_id);
+  });
+
+  // Routes drawn together so shared legs are detected and shown as alternating red/blue
+  const viewClasses = (course.classes || []).map(cl => ({
+    marks: (cl.marks || []).map(normaliseMark),
+    startType: cl.start_type,
+    balconyWpId: cl.balcony_wp_id,
+  }));
+  _drawMultiClassRoutes(map, viewClasses);
+
+  if (allLatlngs.length > 1) {
+    map.fitBounds(L.latLngBounds(allLatlngs).pad(0.15));
+  } else if (allLatlngs.length === 1) {
+    map.setView(allLatlngs[0], 13);
+  } else {
+    map.setView([50.87, -1.37], 12);
+  }
+  addMapCompassOverlay(map, normalizeBearingValue(course.wind_bearing_min), normalizeBearingValue(course.wind_bearing_max));
   map.invalidateSize();
 }
 
@@ -1585,6 +1828,27 @@ function openCourseEditor(courseId, prePopulated = null) {
   }
   renderEditorMarkList();
 
+  // Multi-class state
+  S.multiClass = course?.multi_class ?? false;
+  document.getElementById('editorMultiClass').checked = S.multiClass;
+  if (S.multiClass && course?.classes?.length) {
+    S.editorClasses = course.classes.map(cl => ({
+      name: cl.name,
+      marks: (cl.marks || []).map(normaliseMark),
+      startType: cl.start_type ?? 'none',
+      balconyWpId: cl.balcony_wp_id ?? null,
+      boatSpeed: cl.boat_speed ?? 5,
+    }));
+    // Pad to 2 classes if needed
+    while (S.editorClasses.length < 2)
+      S.editorClasses.push({ name: `Class ${S.editorClasses.length + 1}`, marks: [], startType: 'none', balconyWpId: null, boatSpeed: 5 });
+  } else {
+    S.editorClasses = [
+      { name: 'Class 1', marks: [], startType: 'none', balconyWpId: null, boatSpeed: 5 },
+      { name: 'Class 2', marks: [], startType: 'none', balconyWpId: null, boatSpeed: 5 },
+    ];
+  }
+
   const deleteBtn = document.getElementById('editorDeleteBtn');
   if (deleteBtn) {
     if (courseId) deleteBtn.classList.remove('d-none');
@@ -1595,7 +1859,9 @@ function openCourseEditor(courseId, prePopulated = null) {
   modal.show();
 
   document.getElementById('editorModal').addEventListener('shown.bs.modal', () => {
-    initEditorMap();
+    // Apply multi-class UI (shows/hides sections, populates selects, inits correct map)
+    setMultiClass(S.multiClass);
+    if (!S.multiClass) initEditorMap();
   }, { once: true });
 }
 
@@ -1764,6 +2030,118 @@ function updateEditorMap() {
   S.editorMap.invalidateSize();
 }
 
+// Draw multi-class routes leg-by-leg. Legs shared between all classes get a
+// solid alternating red/blue pattern; per-class legs get the class colour dashed.
+function _drawMultiClassRoutes(map, classes) {
+  const CLASS_COLORS = ['#C8102E', '#003DA5'];
+
+  function getLegs(marks) {
+    const s = new Set();
+    for (let i = 0; i < marks.length - 1; i++) {
+      const w1 = marks[i].wp, w2 = marks[i + 1].wp;
+      if (w1 && w2) s.add(`${w1}-${w2}`);
+    }
+    return s;
+  }
+
+  const active = classes.filter(cl => cl.marks.length >= 2);
+  const sharedLegs = active.length < 2 ? new Set() : (() => {
+    const result = new Set(getLegs(active[0].marks));
+    for (let i = 1; i < active.length; i++) {
+      const other = getLegs(active[i].marks);
+      for (const leg of [...result]) { if (!other.has(leg)) result.delete(leg); }
+    }
+    return result;
+  })();
+
+  // Per-class: draw non-shared legs
+  classes.forEach((cl, ci) => {
+    if (cl.marks.length < 2) return;
+    const color = CLASS_COLORS[ci] || '#6c757d';
+    const offsets = roundingOffsetPositions(cl.marks);
+    for (let i = 0; i < cl.marks.length - 1 && i < offsets.length - 1; i++) {
+      const w1 = cl.marks[i].wp, w2 = cl.marks[i + 1].wp;
+      if (w1 && w2 && sharedLegs.has(`${w1}-${w2}`)) continue;
+      drawCourseRoute(map, buildRoutedPath([offsets[i], offsets[i + 1]]), color);
+    }
+  });
+
+  // Shared legs: solid alternating red/blue (drawn once using class-0 offsets)
+  if (sharedLegs.size && active.length >= 2) {
+    const cl0 = active[0];
+    const offsets0 = roundingOffsetPositions(cl0.marks);
+    for (let i = 0; i < cl0.marks.length - 1 && i < offsets0.length - 1; i++) {
+      const w1 = cl0.marks[i].wp, w2 = cl0.marks[i + 1].wp;
+      if (!w1 || !w2 || !sharedLegs.has(`${w1}-${w2}`)) continue;
+      const path = buildRoutedPath([offsets0[i], offsets0[i + 1]]);
+      if (path.length < 2) continue;
+      L.polyline(path, { color: '#C8102E', weight: 3.5, dashArray: '10 10', opacity: 0.95 }).addTo(map);
+      L.polyline(path, { color: '#003DA5', weight: 3.5, dashArray: '10 10', dashOffset: '10', opacity: 0.95 }).addTo(map);
+      if (typeof L.polylineDecorator !== 'undefined') {
+        L.polylineDecorator(path, { patterns: [{ offset: 35, repeat: 85,
+          symbol: L.Symbol.arrowHead({ pixelSize: 11, polygon: false,
+            pathOptions: { color: '#333', weight: 2, opacity: 0.85 } }),
+        }] }).addTo(map);
+      }
+    }
+  }
+}
+
+function initEditorMapMulti() {
+  if (S.editorMapMulti) { S.editorMapMulti.remove(); S.editorMapMulti = null; }
+  const map = L.map('editorMapMulti');
+  S.editorMapMulti = map;
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors', maxZoom: 18,
+  }).addTo(map);
+  map.setView([50.87, -1.37], 12);
+  map.invalidateSize();
+  updateEditorMapMulti();
+}
+
+function updateEditorMapMulti() {
+  if (!S.editorMapMulti) return;
+  const map = S.editorMapMulti;
+  map.eachLayer(l => {
+    if (l instanceof L.Marker || l instanceof L.Polyline || l._isDecorator) map.removeLayer(l);
+  });
+
+  drawObsPolygons(map, activeOOB());
+
+  allActiveWaypoints().forEach(wp => {
+    const icon = wp.kind === 'balcony' ? makeBalconyWpDotIcon() : makeWpDotIcon(wp);
+    L.marker([wp.lat, wp.lon], { icon })
+      .addTo(map)
+      .bindTooltip(`${wp.code} — ${wp.name}${wp.kind === 'balcony' ? ' (Balcony)' : ''}`, { direction: 'top', opacity: 0.85 });
+  });
+
+  const CLASS_COLORS = ['#C8102E', '#003DA5'];
+  const allLatlngs = [];
+
+  S.editorClasses.forEach((cl, ci) => {
+    const color = CLASS_COLORS[ci] || '#6c757d';
+    const markLatlngs = [];
+    cl.marks.forEach((mark, i) => {
+      const wp = wpById(mark.wp);
+      if (!wp) return;
+      markLatlngs.push([wp.lat, wp.lon]);
+      allLatlngs.push([wp.lat, wp.lon]);
+      L.marker([wp.lat, wp.lon], { icon: makeMarkIcon(getMarkType(wp), i + 1) })
+        .addTo(map)
+        .bindPopup(`<strong>${esc(wp.code)} — ${esc(wp.name)}</strong><br><small>${cl.name}</small>`);
+    });
+    drawStartMarker(map, cl.marks, markLatlngs, cl.startType, cl.balconyWpId);
+  });
+
+  _drawMultiClassRoutes(map, S.editorClasses);
+
+  if (allLatlngs.length > 1) map.fitBounds(L.latLngBounds(allLatlngs).pad(0.15));
+  else if (allLatlngs.length === 1) map.setView(allLatlngs[0], 13);
+
+  addMapCompassOverlay(map, S.windBearingMin, S.windBearingMax);
+  map.invalidateSize();
+}
+
 function updateEditorWind() {
   if (S.windSingleMode) {
     const single = normalizeBearingValue(document.getElementById('editorWindSingle').value);
@@ -1778,8 +2156,12 @@ function updateEditorWind() {
     S.windBearingMin = normalizeBearingValue(document.getElementById('editorWindMin').value);
     S.windBearingMax = normalizeBearingValue(document.getElementById('editorWindMax').value);
   }
-  addMapCompassOverlay(S.editorMap, S.windBearingMin, S.windBearingMax);
-  renderEditorMarkList();
+  if (S.multiClass) {
+    addMapCompassOverlay(S.editorMapMulti, S.windBearingMin, S.windBearingMax);
+  } else {
+    addMapCompassOverlay(S.editorMap, S.windBearingMin, S.windBearingMax);
+    renderEditorMarkList();
+  }
 }
 
 function _isSymmetricRange(min, max) {
@@ -1834,6 +2216,14 @@ async function saveEditorCourse() {
     wind_bearing_max: S.windBearingMax,
     boat_speed:  parseFloat(document.getElementById('editorBoatSpeed').value) || 5,
     beat_factor: 0.7,
+    multi_class: S.multiClass,
+    classes: S.multiClass ? S.editorClasses.map((cl, i) => ({
+      name: cl.name,
+      marks: cl.marks,
+      start_type: cl.startType,
+      balcony_wp_id: cl.balconyWpId || null,
+      boat_speed: parseFloat(document.getElementById(`class${i + 1}BoatSpeed`).value) || 5,
+    })) : [],
   };
   const url     = S.editingCourseId ? `/api/courses/${S.editingCourseId}` : '/api/courses';
   const method  = S.editingCourseId ? 'PUT' : 'POST';
@@ -2269,6 +2659,115 @@ function drawStartMarker(map, marks, markLatlngs, startType, balconyWpId) {
       .addTo(map)
       .bindPopup(`<strong>Balcony</strong><br><small>${esc(balconyWp.code)} — ${esc(balconyWp.name)}</small>`);
     markLatlngs.push([balconyWp.lat, balconyWp.lon]);
+  }
+}
+
+// ── Multi-class editor helpers ─────────────────────────────────────────────
+
+function setMultiClass(enabled) {
+  S.multiClass = enabled;
+  document.getElementById('singleClassSection').classList.toggle('d-none', enabled);
+  document.getElementById('multiClassSection').classList.toggle('d-none', !enabled);
+  document.getElementById('singleBoatSpeedRow').classList.toggle('d-none', enabled);
+  if (enabled) {
+    _populateClassWpSelects();
+    renderClassMarkList(0);
+    renderClassMarkList(1);
+    _applyClassStartTypeUI(0);
+    _applyClassStartTypeUI(1);
+    document.getElementById('class1BoatSpeed').value = S.editorClasses[0].boatSpeed || 5;
+    document.getElementById('class2BoatSpeed').value = S.editorClasses[1].boatSpeed || 5;
+    setTimeout(() => initEditorMapMulti(), 50);
+  } else {
+    updateEditorMap();
+  }
+}
+
+function _populateClassWpSelects() {
+  const sorted = [...activeWaypoints()].sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+  const opts = sorted.map(w => `<option value="${w.id}">${esc(w.code)} — ${esc(w.name)}</option>`).join('');
+  document.getElementById('class1WpSelect').innerHTML = opts;
+  document.getElementById('class2WpSelect').innerHTML = opts;
+}
+
+function classAddMark(classIdx) {
+  const selId = classIdx === 0 ? 'class1WpSelect' : 'class2WpSelect';
+  const wpId = document.getElementById(selId).value;
+  if (!wpId) return;
+  S.editorClasses[classIdx].marks.push({ wp: wpId, rounding: 'P' });
+  renderClassMarkList(classIdx);
+  updateEditorMapMulti();
+}
+
+function classRemoveMark(classIdx, i) {
+  S.editorClasses[classIdx].marks.splice(i, 1);
+  renderClassMarkList(classIdx);
+  updateEditorMapMulti();
+}
+
+function classToggleRounding(classIdx, i) {
+  const mark = S.editorClasses[classIdx].marks[i];
+  mark.rounding = mark.rounding === 'P' ? 'S' : 'P';
+  renderClassMarkList(classIdx);
+  updateEditorMapMulti();
+}
+
+function renderClassMarkList(classIdx) {
+  const containerId = classIdx === 0 ? 'class1MarkList' : 'class2MarkList';
+  const container = document.getElementById(containerId);
+  const marks = S.editorClasses[classIdx].marks;
+  if (!marks.length) {
+    container.innerHTML = '<p class="text-muted small mb-0">No marks yet.</p>';
+    return;
+  }
+  container.innerHTML = marks.map((mark, i) => {
+    const wp = wpById(mark.wp);
+    const name = wp ? `${esc(wp.code)} — ${esc(wp.name)}` : '?';
+    const rnd = mark.rounding || 'P';
+    return `<div class="d-flex align-items-center gap-1 py-1 border-bottom">
+      <span class="mark-badge" style="background:#6c757d;color:#fff;width:20px;height:20px;font-size:10px;line-height:20px;flex-shrink:0">${i + 1}</span>
+      <span class="small flex-fill">${name}</span>
+      <button class="btn btn-outline-secondary btn-sm py-0 px-1" style="font-size:10px" onclick="classToggleRounding(${classIdx},${i})" title="Rounding">${rnd}</button>
+      <button class="btn btn-outline-danger btn-sm py-0 px-1" style="font-size:10px" onclick="classRemoveMark(${classIdx},${i})">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function setClassStartType(classIdx, val) {
+  S.editorClasses[classIdx].startType = val;
+  _applyClassStartTypeUI(classIdx);
+  updateEditorMapMulti();
+}
+
+function setClassBalconyWp(classIdx, wpId) {
+  S.editorClasses[classIdx].balconyWpId = wpId;
+  updateEditorMapMulti();
+}
+
+function _applyClassStartTypeUI(classIdx) {
+  const prefix = classIdx === 0 ? 'class1' : 'class2';
+  const st = S.editorClasses[classIdx].startType;
+  const radio = document.querySelector(`input[name="${prefix}StartType"][value="${st}"]`);
+  if (radio) radio.checked = true;
+
+  const balconyWps = activeBalconyWaypoints();
+  const balconyRadio = document.getElementById(`${prefix}StartBalcony`);
+  if (balconyRadio) {
+    balconyRadio.disabled = balconyWps.length === 0;
+    balconyRadio.title = balconyWps.length === 0 ? 'Add a waypoint with kind "Balcony" to enable this' : '';
+  }
+
+  const row = document.getElementById(`${prefix}BalconyRow`);
+  const sel = document.getElementById(`${prefix}BalconySelect`);
+  if (st === 'balcony') {
+    row.classList.remove('d-none');
+    sel.innerHTML = balconyWps.map(w =>
+      `<option value="${w.id}" ${w.id === S.editorClasses[classIdx].balconyWpId ? 'selected' : ''}>${esc(w.code)} — ${esc(w.name)}</option>`
+    ).join('');
+    if (!S.editorClasses[classIdx].balconyWpId && balconyWps.length)
+      S.editorClasses[classIdx].balconyWpId = balconyWps[0].id;
+  } else {
+    row.classList.add('d-none');
   }
 }
 

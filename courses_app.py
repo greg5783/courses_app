@@ -304,8 +304,10 @@ def create_course():
         'balcony_wp_id': d.get('balcony_wp_id', None),
         'wind_bearing_min': d.get('wind_bearing_min', None),
         'wind_bearing_max': d.get('wind_bearing_max', None),
-        'boat_speed':  d.get('boat_speed', 5),
-        'beat_factor': d.get('beat_factor', 0.7),
+        'boat_speed':   d.get('boat_speed', 5),
+        'beat_factor':  d.get('beat_factor', 0.7),
+        'multi_class':  d.get('multi_class', False),
+        'classes':      d.get('classes', []),
     }
     courses.append(course)
     _save(COURSES_FILE, courses)
@@ -328,6 +330,8 @@ def update_course(cid):
             course['wind_bearing_max'] = d.get('wind_bearing_max', course.get('wind_bearing_max'))
             course['boat_speed']  = d.get('boat_speed',  course.get('boat_speed',  5))
             course['beat_factor'] = d.get('beat_factor', course.get('beat_factor', 0.7))
+            course['multi_class'] = d.get('multi_class', course.get('multi_class', False))
+            course['classes']     = d.get('classes',     course.get('classes', []))
             _save(COURSES_FILE, courses)
             return jsonify(course)
     return jsonify({'error': 'Not found'}), 404

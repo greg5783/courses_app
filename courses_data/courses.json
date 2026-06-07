@@ -178,5 +178,138 @@
       "lat": 50.870978137947134,
       "lon": -1.3605239023523774
     }
+  },
+  {
+    "id": "1780854011584",
+    "name": "L",
+    "series_type_id": "1780088857250",
+    "marks": [],
+    "start_type": "none",
+    "balcony_wp_id": null,
+    "wind_bearing_min": null,
+    "wind_bearing_max": null,
+    "boat_speed": 5,
+    "beat_factor": 0.7,
+    "multi_class": true,
+    "classes": [
+      {
+        "name": "Class 1",
+        "marks": [
+          {
+            "wp": "7V",
+            "rounding": "P"
+          }
+        ],
+        "start_type": "none",
+        "balcony_wp_id": null,
+        "boat_speed": 5
+      },
+      {
+        "name": "Class 2",
+        "marks": [],
+        "start_type": "none",
+        "balcony_wp_id": null,
+        "boat_speed": 5
+      }
+    ]
+  },
+  {
+    "id": "1780854449546",
+    "name": "Long",
+    "series_type_id": "1780088857250",
+    "marks": [],
+    "start_type": "none",
+    "balcony_wp_id": null,
+    "wind_bearing_min": null,
+    "wind_bearing_max": null,
+    "boat_speed": 5,
+    "beat_factor": 0.7,
+    "multi_class": true,
+    "classes": [
+      {
+        "name": "Class 1",
+        "marks": [
+          {
+            "rounding": "P",
+            "wp": "7T"
+          },
+          {
+            "rounding": "S",
+            "wp": "7N"
+          },
+          {
+            "rounding": "S",
+            "wp": "HI1"
+          },
+          {
+            "rounding": "S",
+            "wp": "7K"
+          },
+          {
+            "rounding": "S",
+            "wp": "7T"
+          },
+          {
+            "rounding": "P",
+            "wp": "7U"
+          },
+          {
+            "rounding": "S",
+            "wp": "7W"
+          },
+          {
+            "rounding": "S",
+            "wp": "7S"
+          },
+          {
+            "rounding": "S",
+            "wp": "7N"
+          },
+          {
+            "rounding": "S",
+            "wp": "7T"
+          }
+        ],
+        "start_type": "cb",
+        "balcony_wp_id": null,
+        "boat_speed": 5.6
+      },
+      {
+        "name": "Class 2",
+        "marks": [
+          {
+            "rounding": "P",
+            "wp": "7T"
+          },
+          {
+            "rounding": "S",
+            "wp": "7N"
+          },
+          {
+            "rounding": "S",
+            "wp": "7K"
+          },
+          {
+            "rounding": "S",
+            "wp": "7T"
+          },
+          {
+            "rounding": "S",
+            "wp": "7S"
+          },
+          {
+            "rounding": "S",
+            "wp": "7N"
+          },
+          {
+            "rounding": "S",
+            "wp": "7T"
+          }
+        ],
+        "start_type": "none",
+        "balcony_wp_id": null,
+        "boat_speed": 5
+      }
+    ]
   }
 ]
